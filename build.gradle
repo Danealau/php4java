@@ -32,3 +32,9 @@ task prepare {
 
 // We need to build native library after preparations are done
 prepare.finalizedBy ':subproj-php-native:buildObjFile'
+
+// Build can run only after preparations
+build.dependsOn "prepare"
+
+// Do not test while building (or tests can be started while building BEFORE library is built - will be an error)
+build.dependsOn.remove("check")
