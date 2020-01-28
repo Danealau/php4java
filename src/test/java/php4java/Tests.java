@@ -1,8 +1,12 @@
 package php4java;
 
-public class PhpTest {
-    public static void main(String[] args) {
-        System.out.println("Initializing PHP...\n");
+import org.junit.Test;
+
+public class Tests
+{
+    @Test public void testSomeLibraryMethod()
+    {
+        System.out.printf("Initializing PHP...\n");
         Php.init();
 
         System.out.println("Requiring test.php...\n");
