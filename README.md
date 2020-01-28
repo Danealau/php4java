@@ -1,6 +1,6 @@
-# php4j
+# php4java
 
-php4j is PHP embedded in Java. It allows you to call PHP code from Java in the
+php4java is PHP embedded in Java. It allows you to call PHP code from Java in the
 same process. See `PhpTest.java` for example usage.
 
 Alternatives to this are shelling out to PHP (forking) or calling PHP over the
