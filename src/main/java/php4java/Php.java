@@ -1,8 +1,8 @@
-package com.github.adsr.php4j;
+package php4java;
 
 public class Php {
     static {
-        System.loadLibrary("php4j");
+        System.loadLibrary("php4java");
     }
     public static native void init();
     public static native void shutdown();

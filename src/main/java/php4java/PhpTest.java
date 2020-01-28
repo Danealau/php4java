@@ -1,7 +1,4 @@
-import com.github.adsr.php4j.Php;
-import com.github.adsr.php4j.Zval;
-
-import java.util.Map;
+package php4java;
 
 public class PhpTest {
     public static void main(String[] args) {

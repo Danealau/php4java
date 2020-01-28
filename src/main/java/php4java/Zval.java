@@ -1,10 +1,10 @@
-package com.github.adsr.php4j;
+package php4java;
 
 import java.util.Map;
 
 public class Zval {
     static {
-        System.loadLibrary("php4j");
+        System.loadLibrary("php4java");
     }
     private long zvalAddr;
     public native long getLong();

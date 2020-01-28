@@ -3,8 +3,8 @@
 #include <Zend/zend_smart_str.h>
 #include <Zend/zend_smart_str_public.h>
 
-#include "com_github_adsr_php4j_Php.h"
-#include "com_github_adsr_php4j_Zval.h"
+#include "php4java_Php.h"
+#include "php4java_Zval.h"
 
 /** Convert a Zval Java object to a real zval */
 static zval* obj2zval(JNIEnv *env, jobject obj) {
@@ -27,7 +27,7 @@ static jobject zval2obj(JNIEnv *env, zval *z) {
     jfieldID field;
     zval *zdup;
 
-    clazz = (*env)->FindClass(env, "com/github/adsr/php4j/Zval");
+    clazz = (*env)->FindClass(env, "php4java/Zval");
     ctor = (*env)->GetMethodID(env, clazz, "<init>", "()V");
     obj = (*env)->NewObject(env, clazz, ctor);
     field = (*env)->GetFieldID(env, clazz, "zvalAddr", "J");
@@ -40,29 +40,29 @@ static jobject zval2obj(JNIEnv *env, zval *z) {
 }
 
 /*
- * Class:     com_github_adsr_php4j_Php
+ * Class:     php4java_Php
  * Method:    init
  * Signature: ()V
  */
-JNIEXPORT void JNICALL Java_com_github_adsr_php4j_Php_init(JNIEnv *env, jclass cls) {
+JNIEXPORT void JNICALL Java_php4java_Php_init(JNIEnv *env, jclass cls) {
     php_embed_init(0, NULL);
 }
 
 /*
- * Class:     com_github_adsr_php4j_Php
+ * Class:     php4java_Php
  * Method:    shutdown
  * Signature: ()V
  */
-JNIEXPORT void JNICALL Java_com_github_adsr_php4j_Php_shutdown(JNIEnv *env, jclass cls) {
+JNIEXPORT void JNICALL Java_php4java_Php_shutdown(JNIEnv *env, jclass cls) {
     php_embed_shutdown();
 }
 
 /*
- * Class:     com_github_adsr_php4j_Php
+ * Class:     php4java_Php
  * Method:    execString
- * Signature: (Ljava/lang/String;)Lcom/github/adsr/php4j/Zval;
+ * Signature: (Ljava/lang/String;)Lphp4java/Zval;
  */
-JNIEXPORT jobject JNICALL Java_com_github_adsr_php4j_Php_execString(JNIEnv *env, jclass cls, jstring jcode) {
+JNIEXPORT jobject JNICALL Java_php4java_Php_execString(JNIEnv *env, jclass cls, jstring jcode) {
     zval retval;
     const char *code;
     char *result;
@@ -83,44 +83,44 @@ JNIEXPORT jobject JNICALL Java_com_github_adsr_php4j_Php_execString(JNIEnv *env,
 }
 
 /*
- * Class:     com_github_adsr_php4j_Zval
+ * Class:     php4java_Zval
  * Method:    getLong
  * Signature: ()J
  */
-JNIEXPORT jlong JNICALL Java_com_github_adsr_php4j_Zval_getLong(JNIEnv *env, jobject obj) {
+JNIEXPORT jlong JNICALL Java_php4java_Zval_getLong(JNIEnv *env, jobject obj) {
     zval *z;
     z = obj2zval(env, obj);
     return z ? zval_get_long(z) : 0;
 }
 
 /*
- * Class:     com_github_adsr_php4j_Zval
+ * Class:     php4java_Zval
  * Method:    getDouble
  * Signature: ()D
  */
-JNIEXPORT jdouble JNICALL Java_com_github_adsr_php4j_Zval_getDouble(JNIEnv *env, jobject obj) {
+JNIEXPORT jdouble JNICALL Java_php4java_Zval_getDouble(JNIEnv *env, jobject obj) {
     zval *z;
     z = obj2zval(env, obj);
     return z ? zval_get_double(z) : 0.0;
 }
 
 /*
- * Class:     com_github_adsr_php4j_Zval
+ * Class:     php4java_Zval
  * Method:    getBoolean
  * Signature: ()Z
  */
-JNIEXPORT jboolean JNICALL Java_com_github_adsr_php4j_Zval_getBoolean(JNIEnv *env, jobject obj) {
+JNIEXPORT jboolean JNICALL Java_php4java_Zval_getBoolean(JNIEnv *env, jobject obj) {
     zval *z;
     z = obj2zval(env, obj);
     return z ? zval_is_true(z) : 0;
 }
 
 /*
- * Class:     com_github_adsr_php4j_Zval
+ * Class:     php4java_Zval
  * Method:    getString
  * Signature: ()Ljava/lang/String;
  */
-JNIEXPORT jstring JNICALL Java_com_github_adsr_php4j_Zval_getString(JNIEnv *env, jobject obj) {
+JNIEXPORT jstring JNICALL Java_php4java_Zval_getString(JNIEnv *env, jobject obj) {
     zval *z;
     zend_string *str;
     jstring jstr;
@@ -138,11 +138,11 @@ JNIEXPORT jstring JNICALL Java_com_github_adsr_php4j_Zval_getString(JNIEnv *env,
 }
 
 /*
- * Class:     com_github_adsr_php4j_Zval
+ * Class:     php4java_Zval
  * Method:    getArray
- * Signature: ()[Lcom/github/adsr/php4j/Zval;
+ * Signature: ()[Lphp4java/Zval;
  */
-JNIEXPORT jobjectArray JNICALL Java_com_github_adsr_php4j_Zval_getArray(JNIEnv *env, jobject obj) {
+JNIEXPORT jobjectArray JNICALL Java_php4java_Zval_getArray(JNIEnv *env, jobject obj) {
     zval *z;
     zval zcopy;
     jobjectArray array;
@@ -161,7 +161,7 @@ JNIEXPORT jobjectArray JNICALL Java_com_github_adsr_php4j_Zval_getArray(JNIEnv *
     ZVAL_COPY(&zcopy, z);
     convert_to_array(&zcopy);
 
-    clazz = (*env)->FindClass(env, "com/github/adsr/php4j/Zval");
+    clazz = (*env)->FindClass(env, "php4java/Zval");
 
     array_ht = Z_ARRVAL(zcopy);
     array_len = zend_array_count(array_ht);
@@ -177,11 +177,11 @@ JNIEXPORT jobjectArray JNICALL Java_com_github_adsr_php4j_Zval_getArray(JNIEnv *
 }
 
 /*
- * Class:     com_github_adsr_php4j_Zval
+ * Class:     php4java_Zval
  * Method:    getHash
  * Signature: ()Ljava/util/Map;
  */
-JNIEXPORT jobject JNICALL Java_com_github_adsr_php4j_Zval_getHash(JNIEnv *env, jobject obj) {
+JNIEXPORT jobject JNICALL Java_php4java_Zval_getHash(JNIEnv *env, jobject obj) {
     zval *z;
     zval zcopy;
     jobject map;
@@ -219,11 +219,11 @@ JNIEXPORT jobject JNICALL Java_com_github_adsr_php4j_Zval_getHash(JNIEnv *env, j
 }
 
 /*
- * Class:     com_github_adsr_php4j_Zval
+ * Class:     php4java_Zval
  * Method:    getJson
  * Signature: ()Ljava/lang/String;
  */
-JNIEXPORT jstring JNICALL Java_com_github_adsr_php4j_Zval_getJson(JNIEnv *env, jobject obj) {
+JNIEXPORT jstring JNICALL Java_php4java_Zval_getJson(JNIEnv *env, jobject obj) {
     char *json;
     jstring jstr;
     smart_str buf = {0};
@@ -243,11 +243,11 @@ JNIEXPORT jstring JNICALL Java_com_github_adsr_php4j_Zval_getJson(JNIEnv *env, j
 }
 
 /*
- * Class:     com_github_adsr_php4j_Zval
+ * Class:     php4java_Zval
  * Method:    dispose
  * Signature: ()V
  */
-JNIEXPORT void JNICALL Java_com_github_adsr_php4j_Zval_dispose(JNIEnv *env, jobject obj) {
+JNIEXPORT void JNICALL Java_php4java_Zval_dispose(JNIEnv *env, jobject obj) {
     zval *z;
     jclass clazz;
     jfieldID field;

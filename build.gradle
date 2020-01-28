@@ -1,0 +1,35 @@
+plugins {
+    id 'java'
+    id 'application'
+    id 'org.ajoberstar.grgit' version '4.0.0-rc.1' apply false
+}
+
+allprojects {
+    repositories {
+        jcenter()
+    }
+}
+
+application {
+    mainClassName = 'php4java.PhpTest'
+}
+
+repositories
+{
+    // Use jcenter for resolving dependencies.
+    // You can declare any Maven/Ivy/file repository here.
+    jcenter()
+}
+
+dependencies {
+    // Use JUnit test framework
+    testImplementation 'junit:junit:4.12'
+}
+
+task prepare {
+    dependsOn ':subproj-php-native:prepGitDeps'
+    dependsOn ':subproj-php-native:buildNativePhpHeader'
+}
+
+// We need to build native library after preparations are done
+prepare.finalizedBy ':subproj-php-native:buildObjFile'

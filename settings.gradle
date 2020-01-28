@@ -1,0 +1,2 @@
+rootProject.name = 'php4java'
+include 'subproj-php-native'

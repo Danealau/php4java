@@ -1,0 +1,115 @@
+apply plugin: 'c'
+
+def privateDepsPath = 'git'
+def projectDir = System.getProperty("user.dir")
+def privateRepsFolder = projectDir + "/" + privateDepsPath
+def currentProjFolder = projectDir + "/subproj-php-native"
+
+// Show info about building environment
+println "Building on OS: " + System.properties['os.name']
+println "Using JDK: " + System.properties['java.home']
+
+def SYS_INCLUDE_DIR = this.properties['system.include.dir']
+def SYS_LOCAL_INCLUDE_DIR = this.properties['system.local.include.dir']
+def JNI_INCLUDE_DIR = System.getenv('JAVA_HOME') + '/include'
+def JNI_LIB_DIR = System.getenv('JAVA_HOME') + '/jre/lib/amd64/server'
+
+println "Using system include directory: " + SYS_INCLUDE_DIR
+println "Using system local include directory: " + SYS_LOCAL_INCLUDE_DIR
+println "Using JNI include directory: " + JNI_INCLUDE_DIR
+println "Using JNI lib directory: " + JNI_LIB_DIR
+
+task buildObjFile() {
+    doLast {
+        def command = 'cc -g -fPIC -c src/jni/php4java.c -o php4java.o' +
+            ' -I' + SYS_INCLUDE_DIR +
+            " -I" + SYS_LOCAL_INCLUDE_DIR +
+            " -I" + JNI_INCLUDE_DIR +
+            " -I" + JNI_INCLUDE_DIR + '/darwin' +
+            " -I" + privateRepsFolder + '/php-src' +
+            " -I" + privateRepsFolder + '/php-src/main' +
+            " -I" + privateRepsFolder + '/php-src/zend' +
+            " -I" + privateRepsFolder + '/php-src/TSRM' +
+            " -I" + currentProjFolder + '/include/jni'
+         /*args << "-O2"
+                        args << "-I" + SYS_INCLUDE_DIR
+                        args << "-I" + SYS_LOCAL_INCLUDE_DIR
+                        args << "-I" + JNI_INCLUDE_DIR
+                        args << "-I" + JNI_INCLUDE_DIR + '/linux'
+                        args << "-I" + privateRepsFolder + '/php-src'
+                        args << "-I" + privateRepsFolder + '/php-src/main'
+                        args << "-I" + privateRepsFolder + '/php-src/zend'
+                        args << "-I" + privateRepsFolder + '/php-src/TSRM'
+                        args << "-I" + currentProjFolder + '/include/jni'
+                        args << "-g"
+                        args << "-fPIC"
+                        args << "-ophp4java.o"
+                        args << "-O2"
+                        args << "-L" + privateRepsFolder + '/php-src/ext/date/.libs'*/
+        println command
+        println command.execute(null, file(currentProjFolder)).text
+
+        command = 'cc -g -fPIC -dynamiclib -o ../libphp4java.dylib php4java.o -lphp' +
+            " -L" + projectDir
+        println command
+        println command.execute(null, file(currentProjFolder)).text
+    }
+}
+
+// Import Grgit object because it's not added yet
+import org.ajoberstar.grgit.Grgit
+import org.ajoberstar.grgit.Credentials
+task prepGitDeps() {
+    doLast {
+        // Remove existing repository
+        project.delete(files(privateRepsFolder + '/php-src'))
+
+        // Clone "php-src"
+        Grgit.clone(
+            dir: privateRepsFolder + '/php-src',
+            uri: 'https://github.com/php/php-src/')
+
+        // Get libiconv prefix from brew
+        def libiconvprefix = new ByteArrayOutputStream()
+        exec {
+            commandLine 'brew', '--prefix', 'libiconv'
+            standardOutput = libiconvprefix
+        }
+        
+        // Prepare PHP repo to become built
+        def cmdBuildconf = './buildconf'
+        println cmdBuildconf.execute(null, file(privateRepsFolder + '/php-src')).text
+
+        // Configure future build
+        def cmdConfigure = './configure' + ' --enable-embed' + ' --with-iconv=' + libiconvprefix.toString()
+        println cmdConfigure.execute(null, file(privateRepsFolder + '/php-src')).text
+
+        // Process PHP building - we need embedded version
+        //println 'make'.execute(null, file(privateRepsFolder + '/php-src')).text
+
+        //println 'make install'.execute(null, file(privateRepsFolder + '/php-src')).text
+    }
+}
+
+task buildNativeZvalHeader() {
+    doLast {
+        println 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+        def javaexeczval = 'javac ' + projectDir + '/src/main/java/php4java/Zval.java' + ' -h ' + currentProjFolder + '/include/jni/'
+        println javaexeczval
+        println javaexeczval.execute(null, file(currentProjFolder + '/src/jni'))
+        println 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+    }
+}
+
+task buildNativePhpHeader() {
+    // Depends on task above (need Zval type)
+    dependsOn buildNativeZvalHeader
+
+    doLast {
+        println 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+        def javaexecphp = 'javac ' + projectDir + '/src/main/java/php4java/Php.java' + ' -h ' + currentProjFolder + '/include/jni/' + ' -cp ' + projectDir + '/src/main/java'
+        println javaexecphp
+        println javaexecphp.execute(null, file(currentProjFolder + '/src/jni'))
+        println 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+    }
+}
