@@ -19,8 +19,47 @@ println "Using system local include directory: " + SYS_LOCAL_INCLUDE_DIR
 println "Using JNI include directory: " + JNI_INCLUDE_DIR
 println "Using JNI lib directory: " + JNI_LIB_DIR
 
-task buildObjFile() {
+// PHP repo make command
+ext.makePhp = {
+    // Make again with correct paths (and make ".dylib")
+    println '[' + name + '] Rebuilding fixed PHP-repo...'
+    def makeCmd = 'make -j6 libphp.dylib'.execute(null, file(privateRepsFolder + '/php-src'))
+    //makeCmd.waitFor()
+    println makeCmd.text
+    println '[' + name + '] Done!\n'
+}
+
+// Fixes PHP repo build
+ext.fixPhpRepoBuild = {
+    println '[' + name + '] Fixing PHP-repo build (moving ".o" files)...'
+    //println 'find . -name *.o | gxargs -n1 -I{} sh -c \'cp {} \$(dirname {})/../\''
+    //println 'find . -name *.o'.execute(null, file(privateRepsFolder + '/php-src')).text
+    def process = 'find . -name *.o'.execute(null, file(privateRepsFolder + '/php-src'))
+
+    // Wait for process
+    process.waitFor()
+
+    // Split result of "find" command to list
+    def fileList = process.text.split()
+
+    for(item in fileList) {
+        // Prepare cp command string
+        def cpProc = 'cp ' + item + ' ' + (new File(item).getParent()) + '/../'
+
+        // Show command
+        println cpProc
+
+        // Process cp and wait for it
+        cpProc.execute(null, file(privateRepsFolder + '/php-src')).waitFor()
+    }
+    
+    //println 'find . -name *.o | gxargs -n1 -I{} sh -c \'cp {} \$(dirname {})/../\''.execute(null, file(privateRepsFolder + '/php-src')).text
+    println '[' + name + '] Done!\n'
+}
+
+task buildObjFile {
     doLast {
+        // Make object file using code
         def command = 'cc -g -fPIC -c src/jni/php4java.c -o php4java.o' +
             ' -I' + SYS_INCLUDE_DIR +
             " -I" + SYS_LOCAL_INCLUDE_DIR +
@@ -31,24 +70,10 @@ task buildObjFile() {
             " -I" + privateRepsFolder + '/php-src/zend' +
             " -I" + privateRepsFolder + '/php-src/TSRM' +
             " -I" + currentProjFolder + '/include/jni'
-         /*args << "-O2"
-                        args << "-I" + SYS_INCLUDE_DIR
-                        args << "-I" + SYS_LOCAL_INCLUDE_DIR
-                        args << "-I" + JNI_INCLUDE_DIR
-                        args << "-I" + JNI_INCLUDE_DIR + '/linux'
-                        args << "-I" + privateRepsFolder + '/php-src'
-                        args << "-I" + privateRepsFolder + '/php-src/main'
-                        args << "-I" + privateRepsFolder + '/php-src/zend'
-                        args << "-I" + privateRepsFolder + '/php-src/TSRM'
-                        args << "-I" + currentProjFolder + '/include/jni'
-                        args << "-g"
-                        args << "-fPIC"
-                        args << "-ophp4java.o"
-                        args << "-O2"
-                        args << "-L" + privateRepsFolder + '/php-src/ext/date/.libs'*/
         println command
         println command.execute(null, file(currentProjFolder)).text
 
+        // Make dynamic lib using object file
         command = 'cc -g -fPIC -dynamiclib -o ../libphp4java.dylib php4java.o -lphp' +
             " -L" + projectDir
         println command
@@ -56,10 +81,21 @@ task buildObjFile() {
     }
 }
 
+task copyPhpDylib {
+    doLast {
+        // Copy library to our directory
+        println '[' + name + '] Copying libphp.dylib to project direcory...'
+        def cmdCpy = ('cp ' + privateRepsFolder + '/php-src' + '/libphp.dylib ' + projectDir).execute(null, file(privateRepsFolder + '/php-src'))
+        cmdCpy.waitFor()
+        println cmdCpy.text
+        println '[' + name + '] Done!\n'
+    }
+}
+
 // Import Grgit object because it's not added yet
 import org.ajoberstar.grgit.Grgit
 import org.ajoberstar.grgit.Credentials
-task prepGitDeps() {
+task refreshPhpRepo {
     doLast {
         // Remove existing repository
         project.delete(files(privateRepsFolder + '/php-src'))
@@ -67,7 +103,23 @@ task prepGitDeps() {
         // Clone "php-src"
         Grgit.clone(
             dir: privateRepsFolder + '/php-src',
-            uri: 'https://github.com/php/php-src/')
+            uri: 'https://github.com/php/php-src/',
+            refToCheckout: 'php-7.4.2')
+    }
+}
+
+task buildPhp {
+    dependsOn refreshPhpRepo
+
+    // Prepare PHP-repo
+    doLast {
+
+        // Clear make
+        println '[' + name + '] Processing PHP-repo\'s make clean...'
+        def makeClean = 'make clean'.execute(null, file(privateRepsFolder + '/php-src'))
+        makeClean.waitFor()
+        println makeClean.text
+        println '[' + name + '] Done!\n'
 
         // Get libiconv prefix from brew
         def libiconvprefix = new ByteArrayOutputStream()
@@ -75,20 +127,42 @@ task prepGitDeps() {
             commandLine 'brew', '--prefix', 'libiconv'
             standardOutput = libiconvprefix
         }
+
+        // brew install bison
+        // We need bison too in PATH: export PATH="/usr/local/opt/bison/bin:$PATH"
         
         // Prepare PHP repo to become built
-        def cmdBuildconf = './buildconf'
-        println cmdBuildconf.execute(null, file(privateRepsFolder + '/php-src')).text
+        println '[' + name + '] Processing PHP-repo\'s ./buildconf...'
+        def cmdBuildconf = './buildconf --force'.execute(null, file(privateRepsFolder + '/php-src'))
+        cmdBuildconf.waitFor()
+        println cmdBuildconf.text
+        println '[' + name + '] Done!\n'
 
         // Configure future build
-        def cmdConfigure = './configure' + ' --enable-embed' + ' --with-iconv=' + libiconvprefix.toString()
-        println cmdConfigure.execute(null, file(privateRepsFolder + '/php-src')).text
+        println '[' + name + '] Processing PHP-repo\'s ./configure...'
+        def cmdConfigure = ('./configure' + ' --enable-embed' + ' --with-iconv=' + libiconvprefix.toString()).execute(null, file(privateRepsFolder + '/php-src'))
+        cmdConfigure.waitFor()
+        println cmdConfigure.text
+        println '[' + name + '] Done!\n'
+
+        // Add string in makefile (for ".dylib" building)
+        println '[' + name + '] Modifying original PHP Makefile...'
+        def f = new File(privateRepsFolder + '/php-src', "Makefile")
+        f.text = f.text + '\n\nlibphp.dylib: $(all_targets)\n'
+        f.text = f.text + '\t$(LIBTOOL) --mode=link --tag=disable-static $(CC) -dynamiclib $(CFLAGS) $(EXTRA_CFLAGS) -rpath $(phptempdir) $(EXTRA_LDFLAGS) $(LDFLAGS) $(PHP_RPATHS) $(PHP_GLOBAL_OBJS) $(PHP_SAPI_OBJS) $(EXTRA_LIBS) $(ZEND_EXTRA_LIBS) -o libphp.dylib'
+        println '[' + name + '] Done!\n'
 
         // Process PHP building - we need embedded version
-        //println 'make'.execute(null, file(privateRepsFolder + '/php-src')).text
-
-        //println 'make install'.execute(null, file(privateRepsFolder + '/php-src')).text
+        makePhp()
+        fixPhpRepoBuild()
+        makePhp()
     }
+    //println 'make install'.execute(null, file(privateRepsFolder + '/php-src')).text
+    finalizedBy copyPhpDylib
+}
+
+task prepGitDeps() {
+    dependsOn buildPhp
 }
 
 task buildNativeZvalHeader() {
@@ -96,7 +170,7 @@ task buildNativeZvalHeader() {
         println 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
         def javaexeczval = 'javac ' + projectDir + '/src/main/java/php4java/Zval.java' + ' -h ' + currentProjFolder + '/include/jni/'
         println javaexeczval
-        println javaexeczval.execute(null, file(currentProjFolder + '/src/jni'))
+        println javaexeczval.execute(null, file(currentProjFolder + '/src/jni')).text
         println 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
     }
 }
@@ -109,7 +183,7 @@ task buildNativePhpHeader() {
         println 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
         def javaexecphp = 'javac ' + projectDir + '/src/main/java/php4java/Php.java' + ' -h ' + currentProjFolder + '/include/jni/' + ' -cp ' + projectDir + '/src/main/java'
         println javaexecphp
-        println javaexecphp.execute(null, file(currentProjFolder + '/src/jni'))
+        println javaexecphp.execute(null, file(currentProjFolder + '/src/jni')).text
         println 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
     }
 }
