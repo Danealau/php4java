@@ -6,5 +6,15 @@ public class Php {
     }
     public static native void init();
     public static native void shutdown();
-    public static native Zval execString(String code);
+    public static Zval execString(String code) throws Php4JavaException
+    {
+        try {
+            return __eval(code);
+        } catch (Exception e)
+        {
+            throw new Php4JavaException(e);
+        }
+    }
+
+    private static native Zval __eval(String code);
 }

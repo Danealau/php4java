@@ -2,6 +2,7 @@
 #include <ext/json/php_json.h>
 #include <Zend/zend_smart_str.h>
 #include <Zend/zend_smart_str_public.h>
+#include <Zend/zend_exceptions.h>
 
 #include "php4java_Php.h"
 #include "php4java_Zval.h"
@@ -57,23 +58,65 @@ JNIEXPORT void JNICALL Java_php4java_Php_shutdown(JNIEnv *env, jclass cls) {
     php_embed_shutdown();
 }
 
+#define GET_PROPERTY(object, id) \
+	zend_read_property_ex(i_get_exception_base(object), (object), ZSTR_KNOWN(id), 0, &rv)
+#define GET_PROPERTY_SILENT(object, id) \
+	zend_read_property_ex(i_get_exception_base(object), (object), ZSTR_KNOWN(id), 1, &rv)
+
+static inline zend_class_entry *i_get_exception_base(zval *object)
+{
+	return instanceof_function(Z_OBJCE_P(object), zend_ce_exception) ? zend_ce_exception : zend_ce_error;
+}
+
+void __process_php4java_exception(JNIEnv *env)
+{
+    zval excval, rv;
+    ZVAL_OBJ(&excval, EG(exception));
+    zend_string* message = zval_get_string(GET_PROPERTY(&excval, ZEND_STR_MESSAGE));
+    zend_string* file = zval_get_string(GET_PROPERTY_SILENT(&excval, ZEND_STR_FILE));
+	zend_long line = zval_get_long(GET_PROPERTY_SILENT(&excval, ZEND_STR_LINE));
+    const char* msg = "[php4java : PHP-JNI : eval] Exception caught!\n>> Message: %s\n>> File: %s\n>> Line: %d";
+
+    ssize_t bufsz = snprintf(NULL, 0, msg, ZSTR_VAL(message), ZSTR_VAL(file), line);
+    char* err_str_ptr = malloc(bufsz + 1);
+    snprintf(err_str_ptr, bufsz + 1, msg, ZSTR_VAL(message), ZSTR_VAL(file), line);
+
+    // free memory with strings
+    zend_string_release_ex(file, 0);
+    zend_string_release_ex(message, 0);
+
+    // Throw Java exception
+    (*env)->ThrowNew(env, (*env)->FindClass(env, "java/lang/Exception"), err_str_ptr);
+}
+
 /*
  * Class:     php4java_Php
  * Method:    execString
  * Signature: (Ljava/lang/String;)Lphp4java/Zval;
  */
-JNIEXPORT jobject JNICALL Java_php4java_Php_execString(JNIEnv *env, jclass cls, jstring jcode) {
+JNIEXPORT jobject JNICALL Java_php4java_Php__1_1eval(JNIEnv *env, jclass cls, jstring jcode) {
     zval retval;
     const char *code;
     char *result;
     jobject obj;
+    int eval_result;
 
     code = (*env)->GetStringUTFChars(env, jcode, 0);
+
+    // Try to "eval(...)" code in PHP engine
     zend_first_try {
-        zend_eval_string_ex((char*)code, &retval, "php4j", 1);
+
+        eval_result = zend_eval_string_ex((char*)code, &retval, "php4j", 0);
+        if (EG(exception)) {
+            __process_php4java_exception(env);
+        }
+        
     } zend_catch {
-        ZVAL_NULL(&retval);
+
+        __process_php4java_exception(env);
+
     } zend_end_try();
+
     (*env)->ReleaseStringUTFChars(env, jcode, code);
 
     obj = zval2obj(env, &retval);
