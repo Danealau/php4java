@@ -1,3 +1,6 @@
+// These links can help to understand how to build cURL and OpenSSL:
+// https://tomthorp.me/blog/installing-custom-openssl-and-curl-legacy-php
+
 plugins {
     id 'java-library'
     id 'org.ajoberstar.grgit' version '4.0.0-rc.1' apply false
@@ -6,6 +9,10 @@ plugins {
 // Name for directory of git dependencies
 def privateDepsPath = 'git'
 def privateRepsFolder = project.projectDir.toString() + "/" + privateDepsPath
+def buildFolderName = 'build'
+def buildLibsFolderName = 'libs'
+def buildPath = project.projectDir.toString() + '/' + buildFolderName
+def buildLibsPath = buildPath + '/' + buildLibsFolderName
 
 // Info about environment
 def SYS_INCLUDE_DIR = this.properties['system.include.dir']
@@ -13,38 +20,7 @@ def SYS_LOCAL_INCLUDE_DIR = this.properties['system.local.include.dir']
 def JNI_INCLUDE_DIR = System.getenv('JAVA_HOME') + '/include'
 def JNI_LIB_DIR = System.getenv('JAVA_HOME') + '/jre/lib/amd64/server'
 
-task buildObjFile {
-    doLast {
-        // Show environment info
-        showEnvironmentInfo()
-
-        // Make object file using code
-        def command = 'cc -g -fPIC -c src/jni/php4java.c -o php4java.o' +
-            ' -I' + SYS_INCLUDE_DIR +
-            " -I" + SYS_LOCAL_INCLUDE_DIR +
-            " -I" + JNI_INCLUDE_DIR +
-            " -I" + JNI_INCLUDE_DIR + '/darwin' +
-            " -I" + privateRepsFolder + '/php-src' +
-            " -I" + privateRepsFolder + '/php-src/main' +
-            " -I" + privateRepsFolder + '/php-src/zend' +
-            " -I" + privateRepsFolder + '/php-src/TSRM' +
-            " -I" + project.projectDir.toString() + '/include/jni'
-        println command
-        println command.execute(null, file(project.projectDir.toString())).text
-
-        // Make dynamic lib using object file
-        command = 'cc -g -fPIC -dynamiclib -o libphp4java.dylib php4java.o -lphp' + " -L" + project.projectDir.toString()
-        println command
-        println command.execute(null, file(project.projectDir.toString())).text
-    }
-}
-
-test {
-  testLogging.showStandardStreams = true
-}
-
-repositories
-{
+repositories {
     // Use jcenter for resolving dependencies.
     // You can declare any Maven/Ivy/file repository here.
     jcenter()
@@ -55,8 +31,142 @@ dependencies {
     testImplementation 'junit:junit:4.12'
 }
 
-ext.showEnvironmentInfo =
-{
+import org.ajoberstar.grgit.Grgit
+import org.ajoberstar.grgit.Credentials
+
+/* ==================================================================================== */
+/* Common routines */
+/* ==================================================================================== */
+
+ext._execute = { root, cmd ->
+    // We use file for sh commands because Gradle can't correctly execute them (don't ask why, it's just true, deal with it)
+    def f = new File(root, '__temporary_script')
+
+    // Set command to script file
+    f.text = cmd
+
+    // Change rights
+    'chmod 777 __temporary_script'.execute(null, file(root))
+
+    // Print command for user
+    println cmd
+
+    // Execute
+    def task = './__temporary_script'.execute(null, file(root))
+    task.in.eachLine {line -> println line}
+    task.err.eachLine {line -> println 'ERROR: ' + line}
+    task.waitFor()
+
+    delete file(root + '/__temporary_script')
+}
+
+/* ==================================================================================== */
+/* OpenSSL routines */
+/* ==================================================================================== */
+
+ext.opensslPrefix = privateRepsFolder + '/openssl/build_root'
+ext.refreshOpensslRepo = {
+        project.delete(files(privateRepsFolder + '/openssl'))
+        Grgit.clone(
+            dir: privateRepsFolder + '/openssl',
+            uri: 'https://github.com/openssl/openssl/',
+            refToCheckout: 'OpenSSL_1_1_1d')
+}
+
+ext.rebuildOpenssl = {
+    def rp = privateRepsFolder + '/openssl'
+
+    // Clean
+    _execute(rp, 'echo ' + '[' + name + '] Processing OpenSSL-repo\\\'s make clean...')
+    _execute(rp, 'make clean')
+    _execute(rp, 'echo ' + '[' + name + '] Done!')
+
+    // Configure OpenSSL build
+    _execute(rp, 'echo ' + '[' + name + '] Processing OpenSSL-repo\\\'s configure...')
+    _execute(rp, './config -fPIC shared --prefix=' + opensslPrefix)
+    _execute(rp, 'echo ' + '[' + name + '] Done!')
+
+    // Build
+    _execute(rp, 'echo ' + '[' + name + '] Processing OpenSSL-repo\\\'s make...')
+    _execute(rp, 'make -j6')
+    _execute(rp, 'echo ' + '[' + name + '] Done!')
+    
+    // Install to prefix
+    _execute(rp, 'echo ' + '[' + name + '] Processing OpenSSL-repo\\\'s make install...')
+    _execute(rp, 'make install')
+    _execute(rp, 'echo ' + '[' + name + '] Done!')
+
+    // Copy built ".dylib" libraries to destination build/libs directory
+    _execute(rp, 'echo ' + '[' + name + '] Copying libraries to build/libs direcory...')
+    _execute(rp, 'cp ' + opensslPrefix + '/lib/*.dylib ' + buildLibsPath)
+    _execute(rp, 'echo ' + '[' + name + '] Done!')
+}
+
+/* ==================================================================================== */
+/* cURL routines */
+/* ==================================================================================== */
+
+ext.curlPrefix = privateRepsFolder + '/curl/build_root'
+ext.refreshCurlRepo = {
+        project.delete(files(privateRepsFolder + '/curl'))
+        Grgit.clone(
+            dir: privateRepsFolder + '/curl',
+            uri: 'https://github.com/curl/curl/',
+            refToCheckout: 'curl-7_68_0')
+}
+
+import org.ajoberstar.grgit.Grgit
+import org.ajoberstar.grgit.Credentials
+ext.rebuildCurl = {
+    def rp = privateRepsFolder + '/curl'
+
+    // Clean
+    _execute(rp, 'echo ' + '[' + name + '] Processing cURL-repo\\\'s make clean...')
+    _execute(rp, 'make clean')
+    _execute(rp, 'echo ' + '[' + name + '] Done!')
+
+    // Prepare configuration
+    _execute(rp, 'echo ' + '[' + name + '] Processing cURL-repo\\\'s buildconf...')
+    _execute(rp, './buildconf')
+    _execute(rp, 'echo ' + '[' + name + '] Done!')
+
+    // Configure cURL build
+    _execute(rp, 'echo ' + '[' + name + '] Processing cURL-repo\\\'s configure...')
+    _execute(rp, 'env PKG_CONFIG_PATH=' + opensslPrefix + '/lib/pkgconfig' + ' ./configure --with-ssl --prefix=' + curlPrefix)
+    _execute(rp, 'echo ' + '[' + name + '] Done!')
+
+    // Build
+    _execute(rp, 'echo ' + '[' + name + '] Processing cURL-repo\\\'s make...')
+    _execute(rp, 'make -j6')
+    _execute(rp, 'echo ' + '[' + name + '] Done!')
+    
+    // Install to prefix
+    _execute(rp, 'echo ' + '[' + name + '] Processing cURL-repo\\\'s install...')
+    _execute(rp, 'make install')
+    _execute(rp, 'echo ' + '[' + name + '] Done!')
+
+    // Copy built ".dylib" libraries to destination build/libs directory
+    _execute(rp, 'echo ' + '[' + name + '] Copying libraries to build/libs direcory...')
+    _execute(rp, 'cp ' + curlPrefix + '/lib/*.dylib ' + buildLibsPath)
+    _execute(rp, 'echo ' + '[' + name + '] Done!')
+}
+
+/* ==================================================================================== */
+/* PHP routines */
+/* ==================================================================================== */
+
+ext.phpPrefix = privateRepsFolder + '/php-src/build_root'
+
+task prepareFolderStructure {
+    _execute(project.projectDir.toString(), 'mkdir ' + buildFolderName)
+    _execute(buildPath, 'mkdir ' + buildLibsFolderName)
+}
+
+test {
+  testLogging.showStandardStreams = true
+}
+
+ext.showEnvironmentInfo = {
     // Show info about building environment
     println "Building on OS: " + System.properties['os.name']
     println "Using JDK: " + System.properties['java.home']
@@ -66,132 +176,36 @@ ext.showEnvironmentInfo =
     println "Using JNI lib directory: " + JNI_LIB_DIR
 }
 
-// PHP repo make command
-ext.makePhp = {
-    // Make again with correct paths (and make ".dylib")
-    println '[' + name + '] Rebuilding fixed PHP-repo...'
-    def makeCmd = 'make -j6 libphp.dylib'.execute(null, file(privateRepsFolder + '/php-src'))
-    println makeCmd.text
-    println '[' + name + '] Done!\n'
+ext.copyPhpDylib = {
+    // Copy library to our directory
+    def rp = privateRepsFolder + '/php-src'
+    _execute(rp, 'echo ' + '[' + name + '] Copying libphp.dylib to project direcory...')
+    _execute(rp, 'cp ' + privateRepsFolder + '/php-src' + '/libphp.dylib ' + buildLibsPath)
+    _execute(rp, 'echo ' + '[' + name + '] Done!')
 }
 
-// Fixes PHP repo build
-ext.fixPhpRepoBuild = {
-    println '[' + name + '] Fixing PHP-repo build (moving ".o" files)...'
-    def process = 'find . -name *.o'.execute(null, file(privateRepsFolder + '/php-src'))
-
-    // Wait for process
-    process.waitFor()
-
-    // Split result of "find" command to list
-    def fileList = process.text.split()
-
-    for(item in fileList) {
-        // Prepare cp command string
-        def cpProc = 'cp ' + item + ' ' + (new File(item).getParent()) + '/../'
-
-        // Show command
-        println cpProc
-
-        // Process cp and wait for it
-        cpProc.execute(null, file(privateRepsFolder + '/php-src')).waitFor()
-    }
-    
-    //println 'find . -name *.o | gxargs -n1 -I{} sh -c \'cp {} \$(dirname {})/../\''.execute(null, file(privateRepsFolder + '/php-src')).text
-    println '[' + name + '] Done!\n'
-}
-
-task copyPhpDylib {
+task refreshRepos {
     doLast {
-        // Copy library to our directory
-        println '[' + name + '] Copying libphp.dylib to project direcory...'
-        def cmdCpy = ('cp ' + privateRepsFolder + '/php-src' + '/libphp.dylib ' + project.projectDir.toString()).execute(null, file(privateRepsFolder + '/php-src'))
-        cmdCpy.waitFor()
-        println cmdCpy.text
-        println '[' + name + '] Done!\n'
-    }
-}
-
-// Import Grgit object because it's not added yet
-import org.ajoberstar.grgit.Grgit
-import org.ajoberstar.grgit.Credentials
-task refreshPhpRepo {
-    doLast {
-        // Remove existing repository
-        project.delete(files(privateRepsFolder + '/php-src'))
-
         // Clone "php-src"
+        project.delete(files(privateRepsFolder + '/php-src'))
         Grgit.clone(
             dir: privateRepsFolder + '/php-src',
             uri: 'https://github.com/php/php-src/',
             refToCheckout: 'php-7.4.2')
+
+        // Clone "openssl"
+        refreshOpensslRepo()
+
+        // Clone "curl"
+        refreshCurlRepo()
     }
-}
-
-task buildPhp {
-    dependsOn refreshPhpRepo
-
-    // Prepare PHP-repo
-    doLast {
-
-        // Clear make
-        println '[' + name + '] Processing PHP-repo\'s make clean...'
-        def makeClean = 'make clean'.execute(null, file(privateRepsFolder + '/php-src'))
-        makeClean.waitFor()
-        println makeClean.text
-        println '[' + name + '] Done!\n'
-
-        // Get libiconv prefix from brew
-        def libiconvprefix = new ByteArrayOutputStream()
-        exec {
-            commandLine 'brew', '--prefix', 'libiconv'
-            standardOutput = libiconvprefix
-        }
-
-        // brew install bison
-        // We need bison too in PATH: export PATH="/usr/local/opt/bison/bin:$PATH"
-        
-        // Prepare PHP repo to become built
-        println '[' + name + '] Processing PHP-repo\'s ./buildconf...'
-        def cmdBuildconf = './buildconf --force'.execute(null, file(privateRepsFolder + '/php-src'))
-        cmdBuildconf.waitFor()
-        println cmdBuildconf.text
-        println '[' + name + '] Done!\n'
-
-        // Configure future build
-        println '[' + name + '] Processing PHP-repo\'s ./configure...'
-        def cmdConfigure = ('./configure' + ' --enable-embed' + ' --with-iconv=' + libiconvprefix.toString()).execute(null, file(privateRepsFolder + '/php-src'))
-        cmdConfigure.waitFor()
-        println cmdConfigure.text
-        println '[' + name + '] Done!\n'
-
-        // Add string in makefile (for ".dylib" building)
-        println '[' + name + '] Modifying original PHP Makefile...'
-        def f = new File(privateRepsFolder + '/php-src', "Makefile")
-        f.text = f.text + '\n\nlibphp.dylib: $(all_targets)\n'
-        f.text = f.text + '\t$(LIBTOOL) --mode=link --tag=disable-static $(CC) -dynamiclib $(CFLAGS) $(EXTRA_CFLAGS) -rpath $(phptempdir) $(EXTRA_LDFLAGS) $(LDFLAGS) $(PHP_RPATHS) $(PHP_GLOBAL_OBJS) $(PHP_SAPI_OBJS) $(EXTRA_LIBS) $(ZEND_EXTRA_LIBS) -o libphp.dylib'
-        println '[' + name + '] Done!\n'
-
-        // Process PHP building - we need embedded version
-        makePhp()
-        fixPhpRepoBuild()
-        makePhp()
-    }
-    //println 'make install'.execute(null, file(privateRepsFolder + '/php-src')).text
-    finalizedBy copyPhpDylib
-}
-
-task prepGitDeps() {
-    dependsOn buildPhp
 }
 
 task buildNativeZvalHeader() {
     doLast {
-        println 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
-        def javaexeczval = 'javac ' + project.projectDir.toString() + '/src/main/java/php4java/Zval.java' + ' -h ' + project.projectDir.toString() + '/include/jni/'
-        println javaexeczval
-        println javaexeczval.execute(null, file(project.projectDir.toString() + '/src/jni')).text
-        println 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+        _execute(project.projectDir.toString() + '/src/jni',
+            'javac ' + project.projectDir.toString() + '/src/main/java/php4java/Zval.java' +
+            ' -h ' + project.projectDir.toString() + '/include/jni/')
     }
 }
 
@@ -200,22 +214,110 @@ task buildNativePhpHeader() {
     dependsOn buildNativeZvalHeader
 
     doLast {
-        println 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
-        def javaexecphp = 'javac ' + project.projectDir.toString() + '/src/main/java/php4java/Php.java' + ' -h ' + project.projectDir.toString() + '/include/jni/' + ' -cp ' + project.projectDir.toString() + '/src/main/java'
-        println javaexecphp
-        
-        println javaexecphp.execute(null, file(project.projectDir.toString() + '/src/jni')).text
-        println 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+        _execute(project.projectDir.toString() + '/src/jni',
+            'javac ' + project.projectDir.toString() + '/src/main/java/php4java/Php.java' +
+            ' -h ' + project.projectDir.toString() + '/include/jni/' +
+            ' -cp ' + project.projectDir.toString() + '/src/main/java')
+    }
+}
+
+task buildPhp {
+    dependsOn refreshRepos
+
+    // Prepare PHP-repo
+    doLast {
+        rebuildOpenssl()
+        rebuildCurl()
+
+        def rp = privateRepsFolder + '/php-src'
+
+        _execute(rp, 'echo ' + '[' + name + '] Processing PHP-repo\\\'s make clean...')
+        _execute(rp, 'make clean')
+        _execute(rp, 'echo ' + '[' + name + '] Done!')
+
+        // brew install bison
+        // We need bison too in PATH: export PATH="/usr/local/opt/bison/bin:$PATH"
+
+        _execute(rp, 'echo ' + '[' + name + '] Processing PHP-repo\\\'s ./buildconf...')
+        _execute(rp, './buildconf --force')
+        _execute(rp, 'echo ' + '[' + name + '] Done!')
+
+        _execute(rp, 'echo ' + '[' + name + '] Processing PHP-repo\\\'s ./configure...\n')
+        _execute(rp, './configure' +
+            ' --enable-embed' +
+            ' PHP_OPENSSL=yes' +
+            ' OPENSSL_LIBS="-L' + opensslPrefix + '/lib -lssl -lcrypto"' +
+            ' OPENSSL_CFLAGS="-I' + opensslPrefix + '/include"' +
+            ' --with-openssl=' + opensslPrefix +
+            ' --with-openssl-dir=' + opensslPrefix +
+            ' --with-curl=' + curlPrefix +
+            ' --prefix=' + phpPrefix +
+            ' --with-iconv=$(brew --prefix libiconv)')
+        _execute(rp, 'echo ' + '[' + name + '] Done!')
+
+        _execute(rp, 'echo ' + '[' + name + '] Modifying original PHP Makefile...')
+        _execute(rp, 'echo "\\n\\nlibphp.dylib: \\\$(all_targets)\\n" >> Makefile')
+        _execute(rp, 'echo "\\t\\$(LIBTOOL) --mode=link --tag=disable-static \\$(CC) -dynamiclib \\$(CFLAGS) \\$(EXTRA_CFLAGS) -rpath \\$(phptempdir) \\$(EXTRA_LDFLAGS) \\$(LDFLAGS) \\$(PHP_RPATHS) \\$(PHP_GLOBAL_OBJS) \\$(PHP_SAPI_OBJS) \\$(EXTRA_LIBS) \\$(ZEND_EXTRA_LIBS) -o libphp.dylib" >> Makefile')
+        _execute(rp, 'echo ' + '[' + name + '] Done!')
+
+        _execute(rp, 'echo ' + '[' + name + '] Building PHP-repo...')
+        _execute(rp, 'make -j6 libphp.dylib')
+        _execute(rp, 'echo ' + '[' + name + '] Done!')
+
+        _execute(rp, 'echo ' + '[' + name + '] Fixing PHP-repo build \\(moving ".o" files\\)...')
+        _execute(rp, 'find . -name "*.o" | grep ".libs/" | gxargs -L 1 -I{} bash -c \'cp {} $(dirname {})/../\'')
+        _execute(rp, 'echo ' + '[' + name + '] Done!')
+
+        _execute(rp, 'echo ' + '[' + name + '] Rebuilding fixed PHP-repo...')
+        _execute(rp, 'make -j6 libphp.dylib')
+        _execute(rp, 'echo ' + '[' + name + '] Done!')
+
+        _execute(rp, 'echo ' + '[' + name + '] Installing...')
+        _execute(rp, 'make install')
+        _execute(rp, 'echo ' + '[' + name + '] Done!')
+
+        copyPhpDylib()
+
+        _execute(rp, 'echo ' + '[' + name + '] Fixing each ".dylib" import to be executed all in one folder...')
+        _execute(buildLibsPath, 'ls -a' +
+            ' | grep -o ".*.dylib"' +
+            ' | gxargs -L 1 -I% sh -c \'otool -L %' +
+            ' | grep -o "' + privateRepsFolder + '/.*.dylib"' +
+            ' | gxargs -L 1 -I{} sh -c "install_name_tool -change {} @loader_path/\\$(basename {}) %"\'')
+        _execute(rp, 'echo ' + '[' + name + '] Done!')
+    }
+}
+
+task buildObjFile {
+    dependsOn buildPhp
+    dependsOn buildNativePhpHeader
+    
+    doLast {
+        // Show environment info
+        showEnvironmentInfo()
+
+        // Make object file using code
+        _execute(project.projectDir.toString(),
+            'cc -g -fPIC -c src/jni/php4java.c -o ' + buildPath + '/php4java.o' +
+            ' -I' + SYS_INCLUDE_DIR +
+            " -I" + SYS_LOCAL_INCLUDE_DIR +
+            " -I" + JNI_INCLUDE_DIR +
+            " -I" + JNI_INCLUDE_DIR + '/darwin' +
+            " -I" + privateRepsFolder + '/php-src' +
+            " -I" + privateRepsFolder + '/php-src/main' +
+            " -I" + privateRepsFolder + '/php-src/zend' +
+            " -I" + privateRepsFolder + '/php-src/TSRM' +
+            " -I" + project.projectDir.toString() + '/include/jni')
+
+        // Make dynamic lib using object file
+        _execute(buildPath,
+            'cc -g -fPIC -dynamiclib -o ' + buildLibsPath + '/libphp4java.dylib php4java.o -lphp' + " -L" + buildLibsPath)
     }
 }
 
 task prepare {
-    dependsOn prepGitDeps
-    dependsOn buildNativePhpHeader
+    dependsOn buildObjFile
 }
-
-// We need to build native library after preparations are done
-prepare.finalizedBy buildObjFile
 
 // Build can run only after preparations
 build.dependsOn prepare
