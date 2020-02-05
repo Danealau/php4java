@@ -16,10 +16,8 @@ def buildPath = projectDir + '/' + buildFolderName
 def buildLibsPath = buildPath + '/' + buildLibsFolderName
 
 // Info about environment
-def SYS_INCLUDE_DIR = this.properties['system.include.dir']
-def SYS_LOCAL_INCLUDE_DIR = this.properties['system.local.include.dir']
-def JNI_INCLUDE_DIR = System.getenv('JAVA_HOME') + '/include'
-def JNI_LIB_DIR = System.getenv('JAVA_HOME') + '/jre/lib/amd64/server'
+def JNI_INCLUDE_DIR = System.properties['java.home'] + '/include'
+def JNI_LIB_DIR = System.properties['java.home'] + '/jre/lib/amd64/server'
 
 repositories {
     // Use jcenter for resolving dependencies.
@@ -235,6 +233,9 @@ task rebuildPhp {
             ' --with-openssl-dir=' + opensslPrefix +
             ' --with-curl=' + curlPrefix +
             ' --prefix=' + phpPrefix +
+            ' LIBXML_CFLAGS="-I$(brew --prefix libxml2)/include/libxml2"' +
+            ' LIBXML_LIBS="-L$(brew --prefix libxml2)/lib -lxml2"' +
+            ' --with-libxml=$(brew --prefix libxml2)' +
             ' YACC=$(brew --prefix bison)/bin/bison' +
             ' --with-iconv=$(brew --prefix libiconv)')
         _execute(rp, 'echo ' + '[' + name + '] Done!')
@@ -280,8 +281,6 @@ ext.showEnvironmentInfo = {
     // Show info about building environment
     println "Building on OS: " + System.properties['os.name']
     println "Using JDK: " + System.properties['java.home']
-    println "Using system include directory: " + SYS_INCLUDE_DIR
-    println "Using system local include directory: " + SYS_LOCAL_INCLUDE_DIR
     println "Using JNI include directory: " + JNI_INCLUDE_DIR
     println "Using JNI lib directory: " + JNI_LIB_DIR
 }
@@ -326,8 +325,6 @@ task buildPhp4JavaObjFile {
         // Make object file using code
         _execute(projectDir,
             'cc -g -fPIC -c src/jni/php4java.c -o ' + buildPath + '/php4java.o' +
-            ' -I' + SYS_INCLUDE_DIR +
-            " -I" + SYS_LOCAL_INCLUDE_DIR +
             " -I" + JNI_INCLUDE_DIR +
             " -I" + JNI_INCLUDE_DIR + '/darwin' +
             " -I" + privateRepsFolder + '/php-src' +
