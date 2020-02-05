@@ -252,6 +252,7 @@ task buildPhp {
             ' --with-openssl-dir=' + opensslPrefix +
             ' --with-curl=' + curlPrefix +
             ' --prefix=' + phpPrefix +
+            ' YACC=$(brew --prefix bison)/bin/bison' +
             ' --with-iconv=$(brew --prefix libiconv)')
         _execute(rp, 'echo ' + '[' + name + '] Done!')
 
