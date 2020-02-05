@@ -1,5 +1,7 @@
 package php4java;
 
+import static org.junit.Assert.*;
+
 import org.junit.Test;
 
 public class Tests
@@ -10,7 +12,17 @@ public class Tests
         Php.init();
 
         System.out.println("Requiring test.php...\n");
-        Zval result = Php.execString("new RuntimeException(); ");
+
+        Zval result = null;
+
+        try
+        {
+            result = Php.execString("new RuntimeException();");
+        }
+        catch(Php4JavaException exception)
+        {
+            fail("Exception encountered: " + exception.getMessage());
+        }
 
         System.out.printf("As long: %d\n\n", result.getLong());
 
