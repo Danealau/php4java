@@ -4,8 +4,8 @@
 #include <Zend/zend_smart_str_public.h>
 #include <Zend/zend_exceptions.h>
 
-#include "php4java_Php.h"
-#include "php4java_Zval.h"
+#include "php4java_Native_Php.h"
+#include "php4java_Native_Php.h"
 
 /** Convert a Zval Java object to a real zval */
 static zval* obj2zval(JNIEnv *env, jobject obj) {
@@ -28,7 +28,7 @@ static jobject zval2obj(JNIEnv *env, zval *z) {
     jfieldID field;
     zval *zdup;
 
-    clazz = (*env)->FindClass(env, "php4java/Zval");
+    clazz = (*env)->FindClass(env, "php4java/Native/Zval");
     ctor = (*env)->GetMethodID(env, clazz, "<init>", "()V");
     obj = (*env)->NewObject(env, clazz, ctor);
     field = (*env)->GetFieldID(env, clazz, "zvalAddr", "J");
@@ -45,7 +45,7 @@ static jobject zval2obj(JNIEnv *env, zval *z) {
  * Method:    init
  * Signature: ()V
  */
-JNIEXPORT void JNICALL Java_php4java_Php_init(JNIEnv *env, jclass cls) {
+JNIEXPORT void JNICALL Java_php4java_Native_Php_init(JNIEnv *env, jclass cls) {
     php_embed_init(0, NULL);
 }
 
@@ -54,7 +54,7 @@ JNIEXPORT void JNICALL Java_php4java_Php_init(JNIEnv *env, jclass cls) {
  * Method:    shutdown
  * Signature: ()V
  */
-JNIEXPORT void JNICALL Java_php4java_Php_shutdown(JNIEnv *env, jclass cls) {
+JNIEXPORT void JNICALL Java_php4java_Native_Php_shutdown(JNIEnv *env, jclass cls) {
     php_embed_shutdown();
 }
 
@@ -92,9 +92,9 @@ void __process_php4java_exception(JNIEnv *env)
 /*
  * Class:     php4java_Php
  * Method:    execString
- * Signature: (Ljava/lang/String;)Lphp4java/Zval;
+ * Signature: (Ljava/lang/String;)Lphp4java/Native/Zval;
  */
-JNIEXPORT jobject JNICALL Java_php4java_Php__1_1eval(JNIEnv *env, jclass cls, jstring jcode) {
+JNIEXPORT jobject JNICALL Java_php4java_Native_Php__1_1eval(JNIEnv *env, jclass cls, jstring jcode) {
     zval retval;
     const char *code;
     char *result;
@@ -106,7 +106,7 @@ JNIEXPORT jobject JNICALL Java_php4java_Php__1_1eval(JNIEnv *env, jclass cls, js
     // Try to "eval(...)" code in PHP engine
     zend_first_try {
 
-        eval_result = zend_eval_string_ex((char*)code, &retval, "php4j", 0);
+        eval_result = zend_eval_string_ex((char*)code, &retval, "php4java", 0);
         if (EG(exception)) {
             __process_php4java_exception(env);
         }
@@ -130,7 +130,7 @@ JNIEXPORT jobject JNICALL Java_php4java_Php__1_1eval(JNIEnv *env, jclass cls, js
  * Method:    getLong
  * Signature: ()J
  */
-JNIEXPORT jlong JNICALL Java_php4java_Zval_getLong(JNIEnv *env, jobject obj) {
+JNIEXPORT jlong JNICALL Java_php4java_Native_Zval_getLong(JNIEnv *env, jobject obj) {
     zval *z;
     z = obj2zval(env, obj);
     return z ? zval_get_long(z) : 0;
@@ -141,7 +141,7 @@ JNIEXPORT jlong JNICALL Java_php4java_Zval_getLong(JNIEnv *env, jobject obj) {
  * Method:    getDouble
  * Signature: ()D
  */
-JNIEXPORT jdouble JNICALL Java_php4java_Zval_getDouble(JNIEnv *env, jobject obj) {
+JNIEXPORT jdouble JNICALL Java_php4java_Native_Zval_getDouble(JNIEnv *env, jobject obj) {
     zval *z;
     z = obj2zval(env, obj);
     return z ? zval_get_double(z) : 0.0;
@@ -152,7 +152,7 @@ JNIEXPORT jdouble JNICALL Java_php4java_Zval_getDouble(JNIEnv *env, jobject obj)
  * Method:    getBoolean
  * Signature: ()Z
  */
-JNIEXPORT jboolean JNICALL Java_php4java_Zval_getBoolean(JNIEnv *env, jobject obj) {
+JNIEXPORT jboolean JNICALL Java_php4java_Native_Zval_getBoolean(JNIEnv *env, jobject obj) {
     zval *z;
     z = obj2zval(env, obj);
     return z ? zval_is_true(z) : 0;
@@ -163,7 +163,7 @@ JNIEXPORT jboolean JNICALL Java_php4java_Zval_getBoolean(JNIEnv *env, jobject ob
  * Method:    getString
  * Signature: ()Ljava/lang/String;
  */
-JNIEXPORT jstring JNICALL Java_php4java_Zval_getString(JNIEnv *env, jobject obj) {
+JNIEXPORT jstring JNICALL Java_php4java_Native_Zval_getString(JNIEnv *env, jobject obj) {
     zval *z;
     zend_string *str;
     jstring jstr;
@@ -183,9 +183,9 @@ JNIEXPORT jstring JNICALL Java_php4java_Zval_getString(JNIEnv *env, jobject obj)
 /*
  * Class:     php4java_Zval
  * Method:    getArray
- * Signature: ()[Lphp4java/Zval;
+ * Signature: ()[Lphp4java/Native/Zval;
  */
-JNIEXPORT jobjectArray JNICALL Java_php4java_Zval_getArray(JNIEnv *env, jobject obj) {
+JNIEXPORT jobjectArray JNICALL Java_php4java_Native_Zval_getArray(JNIEnv *env, jobject obj) {
     zval *z;
     zval zcopy;
     jobjectArray array;
@@ -204,7 +204,7 @@ JNIEXPORT jobjectArray JNICALL Java_php4java_Zval_getArray(JNIEnv *env, jobject 
     ZVAL_COPY(&zcopy, z);
     convert_to_array(&zcopy);
 
-    clazz = (*env)->FindClass(env, "php4java/Zval");
+    clazz = (*env)->FindClass(env, "php4java/Native/Zval");
 
     array_ht = Z_ARRVAL(zcopy);
     array_len = zend_array_count(array_ht);
@@ -224,7 +224,7 @@ JNIEXPORT jobjectArray JNICALL Java_php4java_Zval_getArray(JNIEnv *env, jobject 
  * Method:    getHash
  * Signature: ()Ljava/util/Map;
  */
-JNIEXPORT jobject JNICALL Java_php4java_Zval_getHash(JNIEnv *env, jobject obj) {
+JNIEXPORT jobject JNICALL Java_php4java_Native_Zval_getHash(JNIEnv *env, jobject obj) {
     zval *z;
     zval zcopy;
     jobject map;
@@ -266,7 +266,7 @@ JNIEXPORT jobject JNICALL Java_php4java_Zval_getHash(JNIEnv *env, jobject obj) {
  * Method:    getJson
  * Signature: ()Ljava/lang/String;
  */
-JNIEXPORT jstring JNICALL Java_php4java_Zval_getJson(JNIEnv *env, jobject obj) {
+JNIEXPORT jstring JNICALL Java_php4java_Native_Zval_getJson(JNIEnv *env, jobject obj) {
     char *json;
     jstring jstr;
     smart_str buf = {0};
@@ -290,7 +290,7 @@ JNIEXPORT jstring JNICALL Java_php4java_Zval_getJson(JNIEnv *env, jobject obj) {
  * Method:    dispose
  * Signature: ()V
  */
-JNIEXPORT void JNICALL Java_php4java_Zval_dispose(JNIEnv *env, jobject obj) {
+JNIEXPORT void JNICALL Java_php4java_Native_Zval_dispose(JNIEnv *env, jobject obj) {
     zval *z;
     jclass clazz;
     jfieldID field;

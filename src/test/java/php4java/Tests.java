@@ -1,60 +1,84 @@
 package php4java;
 
-import static org.junit.Assert.*;
-
 import org.junit.Test;
 
 public class Tests
 {
-    @Test public void testSomeLibraryMethod()
+    @Test
+    public void testSimpleValueReturn()
     {
-        System.out.printf("Initializing PHP...\n");
-        Php.init();
+        System.out.printf("Creating PHP instance...\n");
+        var instance = PhpInstanceFactory.CreateInstance();
 
-        System.out.println("Requiring test.php...\n");
-
-        Zval result = null;
+        final String command = "1;";
+        System.out.println("Running '" + command + "' in PHP...\n");
 
         try
         {
-            result = Php.execString("new RuntimeException();");
+            var result = instance.execString(command);
+
+            System.out.printf("As long: %d\n\n", result.asLong());
+            System.out.printf("As double: %f\n\n", result.asDouble());
+            System.out.printf("As bool: %s\n\n", result.asBoolean());
+            System.out.printf("As string: %s\n\n", result.asString());
+            System.out.printf("As json: %s\n\n", result.asJson());
+            var array = result.asArray();
+            System.out.printf("As array: length=%d\n\n", array.length);
         }
-        catch(Php4JavaException exception)
+        catch (Php4JavaException exception)
         {
-            fail("Exception encountered: " + exception.getMessage());
+            System.err.println(exception);
         }
+    }
 
-        System.out.printf("As long: %d\n\n", result.getLong());
+    @Test
+    public void testReturnSituation()
+    {
+        System.out.printf("Creating PHP instance...\n");
+        var instance = PhpInstanceFactory.CreateInstance();
 
-        System.out.printf("As double: %f\n\n", result.getDouble());
+        final String command = "$cinosad = (14324); return $cinosad;";
+        System.out.println("Running '" + command + "' in PHP...\n");
 
-        System.out.printf("As bool: %s\n\n", result.getBoolean());
+        try
+        {
+            var result = instance.execString(command);
 
-        System.out.printf("As string: %s\n\n", result.getString());
-
-        System.out.printf("As json: %s\n\n", result.getJson());
-
-        Zval[] array = result.getArray();
-        System.out.printf("As array: length=%d\n\n", array.length);
-        for (Zval e : array) {
-            e.dispose();
+            System.out.printf("As long: %d\n\n", result.asLong());
+            System.out.printf("As double: %f\n\n", result.asDouble());
+            System.out.printf("As bool: %s\n\n", result.asBoolean());
+            System.out.printf("As string: %s\n\n", result.asString());
+            System.out.printf("As json: %s\n\n", result.asJson());
+            var array = result.asArray();
+            System.out.printf("As array: length=%d\n\n", array.length);
         }
+        catch (Php4JavaException exception)
+        {
+            System.err.println(exception);
+        }
+    }
 
-        // TODO Fix leak
-        //Map<String, Zval> hash = result.getHash();
-        //System.out.printf("As hash: %s\n\n", hash);
-        //for (Zval e : hash.values()) {
-        //    e.dispose();
-        //}
-        //Zval path = hash.get("PATH");
-        //if (path != null) {
-        //    System.out.printf("key[PATH] = %s\n\n", path.getString());
-        //    path.dispose();
-        //}
-
-        System.out.println("Shutting down PHP...\n");
-        result.dispose();
-        Php.shutdown();
-        System.out.println("Fin");
+    @Test
+    public void testMultithreading()
+    {
+        for (int i = 0; i < 2; ++i)
+        {
+            var instance = PhpInstanceFactory.CreateInstance();
+            try
+            {
+                var result = instance.execString("return \\'TEST_STRING\\';");
+                System.out.println("As Long: " + result != null ? result.asLong() : "NULL");
+                System.out.println("As Double: " + result != null ? result.asDouble() : "NULL");
+                System.out.println("As Boolean: " + result != null ? result.asBoolean() : "NULL");
+                System.out.println("As String: " + result != null ? result.asString() : "NULL");
+                //System.out.println(result != null ? result.asHash() : "NULL");
+                //System.out.println(result != null ? result.asJson() : "NULL");
+            }
+            catch(Php4JavaException exception)
+            {
+                System.out.println("CODESTRING");
+                System.out.println(exception);
+            }
+        }
     }
 }

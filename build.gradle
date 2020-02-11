@@ -292,22 +292,22 @@ task refreshRepos {
 }
 
 task buildNativeZvalHeader() {
-    inputs.file(projectDir + '/src/main/java/php4java/Zval.java')
+    inputs.file(projectDir + '/src/main/java/php4java/Native/Zval.java')
     
     doLast {
         _execute(projectDir + '/src/jni',
-            'javac ' + projectDir + '/src/main/java/php4java/Zval.java' +
+            'javac ' + projectDir + '/src/main/java/php4java/Native/Zval.java' +
             ' -h ' + projectDir + '/include/jni/')
     }
 }
 
 task buildNativePhpHeader() {
     dependsOn buildNativeZvalHeader
-    inputs.file(projectDir + '/src/main/java/php4java/Php.java')
+    inputs.file(projectDir + '/src/main/java/php4java/Native/Php.java')
 
     doLast {
         _execute(projectDir + '/src/jni',
-            'javac ' + projectDir + '/src/main/java/php4java/Php.java' +
+            'javac ' + projectDir + '/src/main/java/php4java/Native/Php.java' +
             ' -h ' + projectDir + '/include/jni/' +
             ' -cp ' + projectDir + '/src/main/java')
     }
