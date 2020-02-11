@@ -349,3 +349,6 @@ task buildPhp4JavaDynamicLibrary {
 
 // Build can run only after preparations
 build.dependsOn buildPhp4JavaDynamicLibrary
+
+// Disable tests by default
+test.onlyIf { false }
