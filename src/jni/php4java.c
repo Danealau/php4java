@@ -71,22 +71,52 @@ static inline zend_class_entry *i_get_exception_base(zval *object)
 void __process_php4java_exception(JNIEnv *env)
 {
     zval excval, rv;
+    zend_class_entry *ce_exception;
+
+    // Get object from exception
     ZVAL_OBJ(&excval, EG(exception));
-    zend_string* message = zval_get_string(GET_PROPERTY(&excval, ZEND_STR_MESSAGE));
-    zend_string* file = zval_get_string(GET_PROPERTY_SILENT(&excval, ZEND_STR_FILE));
-	zend_long line = zval_get_long(GET_PROPERTY_SILENT(&excval, ZEND_STR_LINE));
-    const char* msg = "[php4java : PHP-JNI : eval] Exception caught!\n>> Message: %s\n>> File: %s\n>> Line: %d";
 
-    ssize_t bufsz = snprintf(NULL, 0, msg, ZSTR_VAL(message), ZSTR_VAL(file), line);
-    char* err_str_ptr = malloc(bufsz + 1);
-    snprintf(err_str_ptr, bufsz + 1, msg, ZSTR_VAL(message), ZSTR_VAL(file), line);
+    // Get ce
+    ce_exception = EG(exception)->ce;
 
-    // free memory with strings
-    zend_string_release_ex(file, 0);
-    zend_string_release_ex(message, 0);
+    // Clean global exception
+    EG(exception) = NULL;
 
-    // Throw Java exception
-    (*env)->ThrowNew(env, (*env)->FindClass(env, "java/lang/Exception"), err_str_ptr);
+    if (ce_exception == zend_ce_parse_error || ce_exception == zend_ce_compile_error)
+    {
+        // Get message from exception
+        zend_string* message = zval_get_string(GET_PROPERTY(&excval, ZEND_STR_MESSAGE));
+
+        // Get file name from exception
+        zend_string* file = zval_get_string(GET_PROPERTY_SILENT(&excval, ZEND_STR_FILE));
+
+        // Get source line number from exception
+	    zend_long line = zval_get_long(GET_PROPERTY_SILENT(&excval, ZEND_STR_LINE));
+
+        bool is_parse_err = (ce_exception == zend_ce_parse_error);
+
+        const char* msg = "[php4java : PHP-JNI : eval] Internal %s exception caught!\n>> Message: %s\n>> File: %s\n>> Line: %d";
+        ssize_t bufsz = snprintf(NULL, 0, msg, is_parse_err ? "parsing" : "compilation", ZSTR_VAL(message), ZSTR_VAL(file), line);
+        char* err_str_ptr = malloc(bufsz + 1);
+        snprintf(err_str_ptr, bufsz + 1, msg, is_parse_err ? "parsing" : "compilation", ZSTR_VAL(message), ZSTR_VAL(file), line);
+
+        // free memory with strings
+        zend_string_release_ex(file, 0);
+        zend_string_release_ex(message, 0);
+
+        // Throw Java exception
+        (*env)->ThrowNew(env, (*env)->FindClass(env, "java/lang/Exception"), err_str_ptr);
+    }
+    if (instanceof_function(ce_exception, zend_ce_throwable))
+    {
+        // Throw Java exception
+        (*env)->ThrowNew(env, (*env)->FindClass(env, "java/lang/Exception"), "[php4java : PHP-JNI : eval] PHP throwable exception encountered!");
+    }
+    else
+    {
+        // Throw Java exception
+        (*env)->ThrowNew(env, (*env)->FindClass(env, "java/lang/Exception"), "[php4java : PHP-JNI : eval] PHP unknown exception encountered!");
+    }
 }
 
 /*
@@ -107,13 +137,12 @@ JNIEXPORT jobject JNICALL Java_php4java_Native_Php__1_1eval(JNIEnv *env, jclass 
     zend_first_try {
 
         eval_result = zend_eval_string_ex((char*)code, &retval, "php4java", 0);
-        if (EG(exception)) {
+        if (EG(exception))
             __process_php4java_exception(env);
-        }
         
     } zend_catch {
 
-        __process_php4java_exception(env);
+        (*env)->ThrowNew(env, (*env)->FindClass(env, "java/lang/Exception"), "[php4java : PHP-JNI : eval] Unknown <zend_catch> exception encountered!");
 
     } zend_end_try();
 

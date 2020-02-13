@@ -11,7 +11,7 @@ public class PhpInstanceFactory
 {
     protected static Integer _internalInstanceCounter = 0;
 
-    public static php4java.Interfaces.IPhp CreateInstance()
+    public static synchronized php4java.Interfaces.IPhp CreateInstance()
     {
         // Remove all other temp files that were created before
         _removeFiles(".", "libphp4java_tmp_.*");
