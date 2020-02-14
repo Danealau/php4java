@@ -82,7 +82,7 @@ void __process_php4java_exception(JNIEnv *env)
     // Clean global exception
     EG(exception) = NULL;
 
-    if (ce_exception == zend_ce_parse_error || ce_exception == zend_ce_compile_error)
+    if (ce_exception == zend_ce_parse_error || ce_exception == zend_ce_compile_error || instanceof_function(ce_exception, zend_ce_throwable))
     {
         // Get message from exception
         zend_string* message = zval_get_string(GET_PROPERTY(&excval, ZEND_STR_MESSAGE));
@@ -93,12 +93,23 @@ void __process_php4java_exception(JNIEnv *env)
         // Get source line number from exception
 	    zend_long line = zval_get_long(GET_PROPERTY_SILENT(&excval, ZEND_STR_LINE));
 
-        bool is_parse_err = (ce_exception == zend_ce_parse_error);
+        char* err_str_ptr = NULL;
+        if (ce_exception == zend_ce_parse_error || ce_exception == zend_ce_compile_error)
+        {
+            bool is_parse_err = (ce_exception == zend_ce_parse_error);
 
-        const char* msg = "[php4java : PHP-JNI : eval] Internal %s exception caught!\n>> Message: %s\n>> File: %s\n>> Line: %d";
-        ssize_t bufsz = snprintf(NULL, 0, msg, is_parse_err ? "parsing" : "compilation", ZSTR_VAL(message), ZSTR_VAL(file), line);
-        char* err_str_ptr = malloc(bufsz + 1);
-        snprintf(err_str_ptr, bufsz + 1, msg, is_parse_err ? "parsing" : "compilation", ZSTR_VAL(message), ZSTR_VAL(file), line);
+            const char* msg = "[php4java : PHP-JNI : eval] Internal %s exception caught!\n>> Message: %s\n>> File: %s\n>> Line: %d";
+            ssize_t bufsz = snprintf(NULL, 0, msg, is_parse_err ? "parsing" : "compilation", ZSTR_VAL(message), ZSTR_VAL(file), line);
+            err_str_ptr = malloc(bufsz + 1);
+            snprintf(err_str_ptr, bufsz + 1, msg, is_parse_err ? "parsing" : "compilation", ZSTR_VAL(message), ZSTR_VAL(file), line);
+        }
+        else
+        {
+            const char* msg = "[php4java : PHP-JNI : eval] PHP runtime throwable exception caught!\n>> Message: %s\n>> File: %s\n>> Line: %d";
+            ssize_t bufsz = snprintf(NULL, 0, msg, ZSTR_VAL(message), ZSTR_VAL(file), line);
+            err_str_ptr = malloc(bufsz + 1);
+            snprintf(err_str_ptr, bufsz + 1, msg, ZSTR_VAL(message), ZSTR_VAL(file), line);
+        }
 
         // free memory with strings
         zend_string_release_ex(file, 0);
@@ -106,11 +117,6 @@ void __process_php4java_exception(JNIEnv *env)
 
         // Throw Java exception
         (*env)->ThrowNew(env, (*env)->FindClass(env, "java/lang/Exception"), err_str_ptr);
-    }
-    if (instanceof_function(ce_exception, zend_ce_throwable))
-    {
-        // Throw Java exception
-        (*env)->ThrowNew(env, (*env)->FindClass(env, "java/lang/Exception"), "[php4java : PHP-JNI : eval] PHP throwable exception encountered!");
     }
     else
     {
