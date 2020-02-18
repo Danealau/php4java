@@ -230,6 +230,8 @@ task rebuildPhp {
             ' OPENSSL_LIBS="-L' + opensslPrefix + '/lib -lssl -lcrypto"' +
             ' OPENSSL_CFLAGS="-I' + opensslPrefix + '/include"' +
             ' --with-openssl=' + opensslPrefix +
+            ' CURL_LIBS="-L' + curlPrefix + '/lib -lcurl"' +
+            ' CURL_CFLAGS="-I' + curlPrefix + '/include"' +
             ' --with-openssl-dir=' + opensslPrefix +
             ' --with-curl=' + curlPrefix +
             ' --prefix=' + phpPrefix +
