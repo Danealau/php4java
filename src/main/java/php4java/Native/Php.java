@@ -4,9 +4,9 @@ public class Php
 {
     public Php() {}
 
-    public void preloadLibrary(String libraryName)
+    public void preloadLibrary(String libraryPath)
     {
-        System.loadLibrary(libraryName);
+        System.load(libraryPath);
     }
 
     public native void init();

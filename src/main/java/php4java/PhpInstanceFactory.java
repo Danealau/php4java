@@ -4,18 +4,40 @@ import java.io.*;
 import java.io.File;
 import java.lang.reflect.*;
 import java.net.*;
-import java.nio.file.Files;
-import java.nio.file.StandardCopyOption;
+import java.nio.file.Paths;
 
 public class PhpInstanceFactory
 {
     protected static Integer _internalInstanceCounter = 0;
 
+    protected static String _tempFolderNamePattern = "tmp_php_instance_";
+
+    protected static void _createFolderForPhpInstance()
+    {
+        try
+        {
+            Runtime.getRuntime().exec("rsync -r ./ ./" + _tempFolderNamePattern + _internalInstanceCounter + "/").waitFor();
+        }
+        catch (IOException | InterruptedException exc)
+        {
+            System.out.println(exc);
+        }
+    }
+
     public static synchronized php4java.Interfaces.IPhp CreateInstance()
     {
         // Remove all other temp files that were created before
-        _removeFiles(".", "libphp4java_tmp_.*");
-        _removeFiles(".", "libphp_tmp_.*");
+        try
+        {
+            Runtime.getRuntime().exec(new String[] { "sh", "-c", "rm -rf tmp_php_instance*" }).waitFor();
+        }
+        catch (IOException | InterruptedException exc)
+        {
+            System.out.println(exc);
+        }
+
+        // Create new PHP instance folder
+        _createFolderForPhpInstance();
 
         try
         {
@@ -27,23 +49,23 @@ public class PhpInstanceFactory
             // Create own classloader for new PHP instance
             try(URLClassLoader cl = new URLClassLoader(urls, delegateParent))
             {
-                // Prepare temp library files with PHP-interpreter
-                Files.copy(new File("libphp4java.dylib").toPath(), new File("libphp4java_tmp_" + _internalInstanceCounter + ".dylib").toPath(), StandardCopyOption.REPLACE_EXISTING);
-                Files.copy(new File("libphp.dylib").toPath(), new File("libphp_tmp_" + _internalInstanceCounter + ".dylib").toPath(), StandardCopyOption.REPLACE_EXISTING);
-
-                // Change dependencies in php4java wrapping library to point to the correct library
-                Runtime.getRuntime().exec("install_name_tool -change libphp.dylib @loader_path/libphp_tmp_" + _internalInstanceCounter + ".dylib libphp4java_tmp_" + _internalInstanceCounter + ".dylib").waitFor();
-                Runtime.getRuntime().exec("install_name_tool -id libphp4java_tmp_" + _internalInstanceCounter + ".dylib libphp4java_tmp_" + _internalInstanceCounter + ".dylib").waitFor();
-                Runtime.getRuntime().exec("install_name_tool -id libphp_tmp_" + _internalInstanceCounter + ".dylib libphp_tmp_" + _internalInstanceCounter + ".dylib").waitFor();
-
                 // Reload class with new class loader
                 Class<?> reloaded = cl.loadClass(phpClass.getName());
+                var b = reloaded.getDeclaredConstructor().newInstance();
 
-
-                var b = reloaded.newInstance();
+                try
+        {
+            Runtime.getRuntime().exec(new String[] { "sh", "-c", ("install_name_tool -id " + _internalInstanceCounter + " " + _tempFolderNamePattern + _internalInstanceCounter + "/libphp4java.dylib") }).waitFor();
+        }
+        catch (IOException | InterruptedException exc)
+        {
+            System.out.println(exc);
+        }
 
                 // Load library with php4java
-                b.getClass().getDeclaredMethod("preloadLibrary", new Class[]{String.class}).invoke(b, "php4java_tmp_" + _internalInstanceCounter);
+                System.out.println("Attempting to load " + Paths.get(_tempFolderNamePattern + _internalInstanceCounter + "/libphp4java.dylib").toAbsolutePath().toString());
+                b.getClass().getDeclaredMethod("preloadLibrary", new Class[]{String.class}).invoke(b, Paths.get(_tempFolderNamePattern + _internalInstanceCounter + "/libphp4java.dylib").toAbsolutePath().toString());
+                System.out.println("Loaded " + Paths.get(_tempFolderNamePattern + _internalInstanceCounter + "/libphp4java.dylib").toAbsolutePath().toString());
 
                 ++_internalInstanceCounter;
 

@@ -344,6 +344,9 @@ task buildPhp4JavaDynamicLibrary {
         // Make dynamic lib using object file
         _execute(buildPath,
             'cc -g -fPIC -dynamiclib -o ' + buildLibsPath + '/libphp4java.dylib php4java.o -lphp' + " -L" + buildLibsPath)
+
+        // Fix dylib path
+        _execute(buildLibsPath, 'install_name_tool -change libphp.dylib @loader_path/libphp.dylib ' +  buildLibsPath + '/libphp4java.dylib')
     }
 }
 
