@@ -180,6 +180,53 @@ task rebuildCurl {
 }
 
 /* ==================================================================================== */
+/* JNI-Layer routines */
+/* ==================================================================================== */
+
+task buildNativeZvalHeader() {
+    inputs.file(projectDir + '/src/main/java/php4java/Native/Zval.java')
+    
+    doLast {
+        _execute(projectDir + '/src/jni',
+            'javac ' + projectDir + '/src/main/java/php4java/Native/Zval.java' +
+            ' -h ' + projectDir + '/include/jni/')
+    }
+}
+
+task buildNativePhpHeader() {
+    dependsOn buildNativeZvalHeader
+    inputs.file(projectDir + '/src/main/java/php4java/Native/Php.java')
+
+    doLast {
+        _execute(projectDir + '/src/jni',
+            'javac ' + projectDir + '/src/main/java/php4java/Native/Php.java' +
+            ' -h ' + projectDir + '/include/jni/' +
+            ' -cp ' + projectDir + '/src/main/java')
+    }
+}
+
+task buildPhp4JavaObjFile {
+    outputs.file(buildPath + '/php4java.o')
+    dependsOn buildNativePhpHeader
+    
+    doLast {
+        // Show environment info
+        showEnvironmentInfo()
+
+        // Make object file using code
+        _execute(projectDir,
+            'cc -g -fPIC -c src/jni/php4java.c -o ' + buildPath + '/php4java.o' +
+            " -I" + JNI_INCLUDE_DIR +
+            " -I" + JNI_INCLUDE_DIR + '/darwin' +
+            " -I" + privateRepsFolder + '/php-src' +
+            " -I" + privateRepsFolder + '/php-src/main' +
+            " -I" + privateRepsFolder + '/php-src/zend' +
+            " -I" + privateRepsFolder + '/php-src/TSRM' +
+            " -I" + projectDir + '/include/jni')
+    }
+}
+
+/* ==================================================================================== */
 /* PHP routines */
 /* ==================================================================================== */
 
@@ -206,10 +253,11 @@ ext.copyPhpDylib = {
 }
 
 task rebuildPhp {
-    outputs.file(privateRepsFolder + '/php-src/libphp.dylib')
+    outputs.file(buildLibsPath + '/libphp4java.dylib')
     dependsOn refreshPhpRepo
     dependsOn rebuildCurl
     dependsOn rebuildOpenssl
+    dependsOn buildPhp4JavaObjFile
 
     doLast
     {
@@ -243,12 +291,30 @@ task rebuildPhp {
         _execute(rp, 'echo ' + '[' + name + '] Done!')
 
         _execute(rp, 'echo ' + '[' + name + '] Modifying original PHP Makefile...')
-        _execute(rp, 'echo "\\n\\nlibphp.dylib: \\\$(all_targets)\\n" >> Makefile')
-        _execute(rp, 'echo "\\t\\$(LIBTOOL) --mode=link --tag=disable-static \\$(CC) -dynamiclib \\$(CFLAGS) \\$(EXTRA_CFLAGS) -rpath \\$(phptempdir) \\$(EXTRA_LDFLAGS) \\$(LDFLAGS) \\$(PHP_RPATHS) \\$(PHP_GLOBAL_OBJS) \\$(PHP_SAPI_OBJS) \\$(EXTRA_LIBS) \\$(ZEND_EXTRA_LIBS) -o libphp.dylib" >> Makefile')
+        _execute(rp, 'echo "\\nlibphp4java.dylib: \\\$(all_targets)" >> Makefile')
+
+        // We will add some things to makefile because we need dynamic library
+        // Firstly we add sequence part for PHP building
+        def libtoolBuildSequence = '\\t\\$(LIBTOOL) --mode=link --tag=disable-static \\$(CC) -dynamiclib -static \\$(EXTRA_CFLAGS) -rpath \\$(phptempdir) \\$(EXTRA_LDFLAGS) \\$(LDFLAGS) \\$(PHP_RPATHS) \\$(PHP_GLOBAL_OBJS) \\$(PHP_SAPI_OBJS) \\$(EXTRA_LIBS) \\$(ZEND_EXTRA_LIBS) '
+
+        // Than we need to add a static link for cURL library
+        libtoolBuildSequence += curlPrefix + '/lib/libcurl.a '
+
+        // Than we need to add all cURL dependencies
+        libtoolBuildSequence += '-L' + opensslPrefix + '/lib -lnghttp2 -lidn2 -lrtmp -lldap -lbrotlidec -lz '
+
+        // Than we need to add a static link for OpenSSL (and crypto) library
+        libtoolBuildSequence += opensslPrefix + '/lib/libssl.a ' + opensslPrefix + '/lib/libcrypto.a '
+
+        // And at last we need to add our JNI-layer into this library and set output dylib file name
+        libtoolBuildSequence += buildPath + '/php4java.o -o libphp4java.dylib '
+
+        // Now we can add prepared string to Makefile and start building true embedded PHP with JNI (in just one ".dylib")
+        _execute(rp, 'echo "' + libtoolBuildSequence + '" >> Makefile')
         _execute(rp, 'echo ' + '[' + name + '] Done!')
 
         _execute(rp, 'echo ' + '[' + name + '] Building PHP-repo...')
-        _execute(rp, 'make -j6 libphp.dylib')
+        _execute(rp, 'make -j6 libphp4java.dylib')
         _execute(rp, 'echo ' + '[' + name + '] Done!')
 
         _execute(rp, 'echo ' + '[' + name + '] Fixing PHP-repo build \\(moving ".o" files\\)...')
@@ -256,7 +322,7 @@ task rebuildPhp {
         _execute(rp, 'echo ' + '[' + name + '] Done!')
 
         _execute(rp, 'echo ' + '[' + name + '] Rebuilding fixed PHP-repo...')
-        _execute(rp, 'make -j6 libphp.dylib')
+        _execute(rp, 'make -j6 libphp4java.dylib')
         _execute(rp, 'echo ' + '[' + name + '] Done!')
 
         _execute(rp, 'echo ' + '[' + name + '] Installing...')
@@ -271,6 +337,10 @@ task rebuildPhp {
             ' | gxargs -L 1 -I% sh -c \'otool -L %' +
             ' | grep -o "' + privateRepsFolder + '/.*.dylib"' +
             ' | gxargs -L 1 -I{} sh -c "install_name_tool -change {} @loader_path/\\$(basename {}) %"\'')
+        _execute(rp, 'echo ' + '[' + name + '] Done!')
+
+        _execute(rp, 'echo ' + '[' + name + '] Copying dylib to build/libs directory...')
+        _execute(rp, 'cp ' + privateRepsFolder + '/php-src/libphp4java.dylib ' + buildLibsPath)
         _execute(rp, 'echo ' + '[' + name + '] Done!')
     }
 }
@@ -293,67 +363,8 @@ task refreshRepos {
     dependsOn refreshCurlRepo
 }
 
-task buildNativeZvalHeader() {
-    inputs.file(projectDir + '/src/main/java/php4java/Native/Zval.java')
-    
-    doLast {
-        _execute(projectDir + '/src/jni',
-            'javac ' + projectDir + '/src/main/java/php4java/Native/Zval.java' +
-            ' -h ' + projectDir + '/include/jni/')
-    }
-}
-
-task buildNativePhpHeader() {
-    dependsOn buildNativeZvalHeader
-    inputs.file(projectDir + '/src/main/java/php4java/Native/Php.java')
-
-    doLast {
-        _execute(projectDir + '/src/jni',
-            'javac ' + projectDir + '/src/main/java/php4java/Native/Php.java' +
-            ' -h ' + projectDir + '/include/jni/' +
-            ' -cp ' + projectDir + '/src/main/java')
-    }
-}
-
-task buildPhp4JavaObjFile {
-    outputs.file(buildPath + '/php4java.o')
-    dependsOn buildNativePhpHeader
-    dependsOn rebuildPhp
-    
-    doLast {
-        // Show environment info
-        showEnvironmentInfo()
-
-        // Make object file using code
-        _execute(projectDir,
-            'cc -g -fPIC -c src/jni/php4java.c -o ' + buildPath + '/php4java.o' +
-            " -I" + JNI_INCLUDE_DIR +
-            " -I" + JNI_INCLUDE_DIR + '/darwin' +
-            " -I" + privateRepsFolder + '/php-src' +
-            " -I" + privateRepsFolder + '/php-src/main' +
-            " -I" + privateRepsFolder + '/php-src/zend' +
-            " -I" + privateRepsFolder + '/php-src/TSRM' +
-            " -I" + projectDir + '/include/jni')
-    }
-}
-
-task buildPhp4JavaDynamicLibrary {
-    inputs.file(buildPath + '/php4java.o')
-    outputs.file(buildLibsPath + '/libphp4java.dylib')
-    dependsOn buildPhp4JavaObjFile
-
-    doLast {
-        // Make dynamic lib using object file
-        _execute(buildPath,
-            'cc -g -fPIC -dynamiclib -o ' + buildLibsPath + '/libphp4java.dylib php4java.o -lphp' + " -L" + buildLibsPath)
-
-        // Fix dylib path
-        _execute(buildLibsPath, 'install_name_tool -change libphp.dylib @loader_path/libphp.dylib ' +  buildLibsPath + '/libphp4java.dylib')
-    }
-}
-
 // Build can run only after preparations
-build.dependsOn buildPhp4JavaDynamicLibrary
+build.dependsOn rebuildPhp
 
 // Disable tests by default
 test.onlyIf { false }
