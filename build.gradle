@@ -70,10 +70,9 @@ test {
 }
 
 /* ==================================================================================== */
-/* OpenSSL routines */
+/* Github Repo routines */
 /* ==================================================================================== */
 
-ext.opensslPrefix = privateRepsFolder + '/openssl/build_root'
 task refreshOpensslRepo {
     doLast {
         if (!file(privateRepsFolder + '/openssl/.git').exists())
@@ -82,11 +81,42 @@ task refreshOpensslRepo {
             Grgit.clone(
                 dir: privateRepsFolder + '/openssl',
                 uri: 'https://github.com/openssl/openssl/',
-                refToCheckout: 'OpenSSL_1_1_1d')
+                refToCheckout: 'OpenSSL_1_1_1')
         }
     }
 }
 
+task refreshCurlRepo {
+    doLast {
+        if (!file(privateRepsFolder + '/curl/.git').exists())
+        {
+            project.delete(files(privateRepsFolder + '/curl'))
+            Grgit.clone(
+                dir: privateRepsFolder + '/curl',
+                uri: 'https://github.com/curl/curl/',
+                refToCheckout: 'curl-7_67_0')
+        }
+    }
+}
+
+task refreshPhpRepo {
+    doLast {
+        if (!file(privateRepsFolder + '/php-src/.git').exists())
+        {
+            project.delete(files(privateRepsFolder + '/php-src'))
+            Grgit.clone(
+                dir: privateRepsFolder + '/php-src',
+                uri: 'https://github.com/php/php-src/',
+                refToCheckout: 'php-7.4.2')
+        }
+    }
+}
+
+/* ==================================================================================== */
+/* OpenSSL routines */
+/* ==================================================================================== */
+
+ext.opensslPrefix = privateRepsFolder + '/openssl/build_root'
 task rebuildOpenssl {
     outputs.file(opensslPrefix + '/lib/libssl.dylib')
     outputs.file(opensslPrefix + '/lib/libcrypto.dylib')
@@ -101,7 +131,7 @@ task rebuildOpenssl {
 
         // Configure OpenSSL build
         _execute(rp, 'echo ' + '[' + name + '] Processing OpenSSL-repo\\\'s configure...')
-        _execute(rp, './config -fPIC shared --prefix=' + opensslPrefix)
+        _execute(rp, './config -fPIC no-threads --prefix=' + opensslPrefix + ' --openssldir=' + opensslPrefix)
         _execute(rp, 'echo ' + '[' + name + '] Done!')
 
         // Build
@@ -113,11 +143,6 @@ task rebuildOpenssl {
         _execute(rp, 'echo ' + '[' + name + '] Processing OpenSSL-repo\\\'s make install...')
         _execute(rp, 'make install')
         _execute(rp, 'echo ' + '[' + name + '] Done!')
-
-        // Copy built ".dylib" libraries to destination build/libs directory
-        _execute(rp, 'echo ' + '[' + name + '] Copying libraries to build/libs direcory...')
-        _execute(rp, 'cp ' + opensslPrefix + '/lib/*.dylib ' + buildLibsPath)
-        _execute(rp, 'echo ' + '[' + name + '] Done!')
     }
 }
 
@@ -126,19 +151,6 @@ task rebuildOpenssl {
 /* ==================================================================================== */
 
 ext.curlPrefix = privateRepsFolder + '/curl/build_root'
-task refreshCurlRepo {
-    doLast {
-        if (!file(privateRepsFolder + '/curl/.git').exists())
-        {
-            project.delete(files(privateRepsFolder + '/curl'))
-            Grgit.clone(
-                dir: privateRepsFolder + '/curl',
-                uri: 'https://github.com/curl/curl/',
-                refToCheckout: 'curl-7_68_0')
-        }
-    }
-}
-
 task rebuildCurl {
     outputs.file(curlPrefix + '/lib/libcurl.dylib')
     dependsOn refreshCurlRepo
@@ -170,11 +182,6 @@ task rebuildCurl {
         // Install to prefix
         _execute(rp, 'echo ' + '[' + name + '] Processing cURL-repo\\\'s install...')
         _execute(rp, 'make install')
-        _execute(rp, 'echo ' + '[' + name + '] Done!')
-
-        // Copy built ".dylib" libraries to destination build/libs directory
-        _execute(rp, 'echo ' + '[' + name + '] Copying libraries to build/libs direcory...')
-        _execute(rp, 'cp ' + curlPrefix + '/lib/*.dylib ' + buildLibsPath)
         _execute(rp, 'echo ' + '[' + name + '] Done!')
     }
 }
@@ -208,6 +215,7 @@ task buildNativePhpHeader() {
 task buildPhp4JavaObjFile {
     outputs.file(buildPath + '/php4java.o')
     dependsOn buildNativePhpHeader
+    dependsOn refreshPhpRepo
     
     doLast {
         // Show environment info
@@ -231,27 +239,6 @@ task buildPhp4JavaObjFile {
 /* ==================================================================================== */
 
 ext.phpPrefix = privateRepsFolder + '/php-src/build_root'
-task refreshPhpRepo {
-    doLast {
-        if (!file(privateRepsFolder + '/php-src/.git').exists())
-        {
-            project.delete(files(privateRepsFolder + '/php-src'))
-            Grgit.clone(
-                dir: privateRepsFolder + '/php-src',
-                uri: 'https://github.com/php/php-src/',
-                refToCheckout: 'php-7.4.2')
-        }
-    }
-}
-
-ext.copyPhpDylib = {
-    // Copy library to our directory
-    def rp = privateRepsFolder + '/php-src'
-    _execute(rp, 'echo ' + '[' + name + '] Copying libphp.dylib to project direcory...')
-    _execute(rp, 'cp ' + privateRepsFolder + '/php-src' + '/libphp.dylib ' + buildLibsPath)
-    _execute(rp, 'echo ' + '[' + name + '] Done!')
-}
-
 task rebuildPhp {
     outputs.file(buildLibsPath + '/libphp4java.dylib')
     dependsOn refreshPhpRepo
@@ -293,9 +280,21 @@ task rebuildPhp {
         _execute(rp, 'echo ' + '[' + name + '] Modifying original PHP Makefile...')
         _execute(rp, 'echo "\\nlibphp4java.dylib: \\\$(all_targets)" >> Makefile')
 
+        // Temporary space for libs string
+        _execute(rp, 'echo "\\tTMP=\\\"\\\$(EXTRA_LIBS)\\\" ; \\\\" >> Makefile')
+
+        // Remove OpenSSL external dependency (we will link it statically)
+        _execute(rp, 'echo "\\tTMP=\\\$\\\${TMP//-lssl/} ; \\\\" >> Makefile')
+
+        // Remove Crypto external dependency (we will link it statically)
+        _execute(rp, 'echo "\\tTMP=\\\$\\\${TMP//-lcrypto/} ; \\\\" >> Makefile')
+
+        // Remove cURL external dependency (we will link it statically)
+        _execute(rp, 'echo "\\tTMP=\\\$\\\${TMP//-lcurl/} ; \\\\" >> Makefile')
+
         // We will add some things to makefile because we need dynamic library
         // Firstly we add sequence part for PHP building
-        def libtoolBuildSequence = '\\t\\$(LIBTOOL) --mode=link --tag=disable-static \\$(CC) -dynamiclib -static \\$(EXTRA_CFLAGS) -rpath \\$(phptempdir) \\$(EXTRA_LDFLAGS) \\$(LDFLAGS) \\$(PHP_RPATHS) \\$(PHP_GLOBAL_OBJS) \\$(PHP_SAPI_OBJS) \\$(EXTRA_LIBS) \\$(ZEND_EXTRA_LIBS) '
+        def libtoolBuildSequence = '\\t\\$(LIBTOOL) --mode=link --tag=disable-static \\$(CC) -dynamiclib -static \\$(EXTRA_CFLAGS) -rpath \\$(phptempdir) \\$(EXTRA_LDFLAGS) \\$(LDFLAGS) \\$(PHP_RPATHS) \\$(PHP_GLOBAL_OBJS) \\$(PHP_SAPI_OBJS) \\$\\$TMP \\$(ZEND_EXTRA_LIBS) '
 
         // Than we need to add a static link for cURL library
         libtoolBuildSequence += curlPrefix + '/lib/libcurl.a '
@@ -327,16 +326,6 @@ task rebuildPhp {
 
         _execute(rp, 'echo ' + '[' + name + '] Installing...')
         _execute(rp, 'make install')
-        _execute(rp, 'echo ' + '[' + name + '] Done!')
-
-        copyPhpDylib()
-
-        _execute(rp, 'echo ' + '[' + name + '] Fixing each ".dylib" import to be executed all in one folder...')
-        _execute(buildLibsPath, 'ls -a' +
-            ' | grep -o ".*.dylib"' +
-            ' | gxargs -L 1 -I% sh -c \'otool -L %' +
-            ' | grep -o "' + privateRepsFolder + '/.*.dylib"' +
-            ' | gxargs -L 1 -I{} sh -c "install_name_tool -change {} @loader_path/\\$(basename {}) %"\'')
         _execute(rp, 'echo ' + '[' + name + '] Done!')
 
         _execute(rp, 'echo ' + '[' + name + '] Copying dylib to build/libs directory...')
