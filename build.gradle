@@ -261,6 +261,8 @@ task rebuildPhp {
         _execute(rp, 'echo ' + '[' + name + '] Processing PHP-repo\\\'s ./configure...\n')
         _execute(rp, './configure' +
             ' --enable-embed' +
+            ' --enable-sockets' +
+            ' --enable-mbstring' +
             ' PHP_OPENSSL=yes' +
             ' OPENSSL_LIBS="-L' + opensslPrefix + '/lib -lssl -lcrypto"' +
             ' OPENSSL_CFLAGS="-I' + opensslPrefix + '/include"' +
