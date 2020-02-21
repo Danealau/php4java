@@ -220,26 +220,20 @@ task buildNativePhpHeader() {
     }
 }
 
-task buildPhp4JavaObjFile {
-    outputs.file(buildPath + '/php4java.o')
-    dependsOn buildNativePhpHeader
-    dependsOn refreshPhpRepo
-    
-    doLast {
-        // Show environment info
-        showEnvironmentInfo()
+ext.buildPhp4JavaObjFile = {
+    // Show environment info
+    showEnvironmentInfo()
 
-        // Make object file using code
-        _execute(projectDir,
-            'cc -g -fPIC -c src/jni/php4java.c -o ' + buildPath + '/php4java.o' +
-            " -I" + JNI_INCLUDE_DIR +
-            " -I" + JNI_INCLUDE_DIR + '/darwin' +
-            " -I" + privateRepsFolder + '/php-src' +
-            " -I" + privateRepsFolder + '/php-src/main' +
-            " -I" + privateRepsFolder + '/php-src/zend' +
-            " -I" + privateRepsFolder + '/php-src/TSRM' +
-            " -I" + projectDir + '/include/jni')
-    }
+    // Make object file using code
+    _execute(projectDir,
+        'cc -g -fPIC -c src/jni/php4java.c -o ' + buildPath + '/php4java.o' +
+        " -I" + JNI_INCLUDE_DIR +
+        " -I" + JNI_INCLUDE_DIR + '/darwin' +
+        " -I" + privateRepsFolder + '/php-src' +
+        " -I" + privateRepsFolder + '/php-src/main' +
+        " -I" + privateRepsFolder + '/php-src/zend' +
+        " -I" + privateRepsFolder + '/php-src/TSRM' +
+        " -I" + projectDir + '/include/jni')
 }
 
 /* ==================================================================================== */
@@ -252,7 +246,7 @@ task rebuildPhp {
     dependsOn refreshPhpRepo
     dependsOn rebuildCurl
     dependsOn rebuildOpenssl
-    dependsOn buildPhp4JavaObjFile
+    dependsOn buildNativePhpHeader
 
     doLast
     {
@@ -286,6 +280,8 @@ task rebuildPhp {
             ' YACC=$(brew --prefix bison)/bin/bison' +
             ' --with-iconv=$(brew --prefix libiconv)')
         _execute(rp, 'echo ' + '[' + name + '] Done!')
+
+        buildPhp4JavaObjFile()
 
         _execute(rp, 'echo ' + '[' + name + '] Modifying original PHP Makefile...')
         _execute(rp, 'echo "\\nlibphp4java.dylib: \\\$(all_targets)" >> Makefile')
