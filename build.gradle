@@ -179,7 +179,7 @@ task rebuildCurl {
 
         // Configure cURL build
         _execute(rp, 'echo ' + '[' + name + '] Processing cURL-repo\\\'s configure...')
-        _execute(rp, 'env PKG_CONFIG_PATH=' + opensslPrefix + '/lib/pkgconfig' + ' ./configure --with-ssl --prefix=' + curlPrefix)
+        _execute(rp, 'env PKG_CONFIG_PATH=' + opensslPrefix + '/lib/pkgconfig' + ' ./configure --with-ssl=' + opensslPrefix + ' --prefix=' + curlPrefix)
         _execute(rp, 'echo ' + '[' + name + '] Done!')
 
         // Build
