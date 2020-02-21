@@ -38,25 +38,33 @@ import org.ajoberstar.grgit.Credentials
 /* ==================================================================================== */
 
 ext._execute = { root, cmd ->
+    def rnd = Math.random()
+
     // We use file for sh commands because Gradle can't correctly execute them (don't ask why, it's just true, deal with it)
-    def f = new File(root, '__temporary_script')
+    def f = new File(root, '__temporary_script_' + rnd)
 
     // Set command to script file
     f.text = cmd
 
     // Change rights
-    'chmod 777 __temporary_script'.execute(null, file(root))
+    ('chmod 777 __temporary_script_' + rnd).execute(null, file(root))
 
     // Print command for user
     println cmd
 
     // Execute
-    def task = './__temporary_script'.execute(null, file(root))
-    task.in.eachLine {line -> println line}
+    def stdout = ""
+    def task = ('./__temporary_script_' + rnd).execute(null, file(root))
+    task.in.eachLine {line ->
+        println line
+        stdout += line + '\n'
+    }
     task.err.eachLine {line -> println 'ERROR/WARNING: ' + line}
     task.waitFor()
 
-    delete file(root + '/__temporary_script')
+    delete file(root + '/__temporary_script_' + rnd)
+
+    return stdout
 }
 
 task prepareFolderStructure {
