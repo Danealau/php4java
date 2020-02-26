@@ -44,11 +44,23 @@ catch (php4java.Php4JavaException exception)
 ```
 
 ## What do I need to build?
-- libxml2 (`brew install libxml2`)
-- coreutils (`brew install coreutils`)
-- findutils (`brew install findutils`)
+- Homebrew
+- OpenJDK 11 or higher
+- Gradle
+- autoconf 2.68 or higher (`brew install autoconf`)
+- automake 1.7 or higher (`brew install automake`)
+- libtoolize 1.4.2 or higher (`brew install libtool`)
+- Bison 3.0.0 or higher (`brew install bison`)
+- re2c 0.13.4 or higher (`brew install re2c`)
+- gxargs (`brew install findutils`)
+- pkg-config (`brew install pkg-config`)
 - libiconv (`brew install libiconv`)
-- OpenJDK 11
+- oniguruma (`brew install oniguruma`)
+- libxml2 (`brew install libxml2`)
+- nghttp2 (`brew install nghttp2`)
+- libidn2 (`brew install libidn2`)
+- rtmpdump (`brew install rtmpdump`)
+- brotli (`brew install brotli`)
 
 ## How to build?
 To build just run `gradle build` in base project directory

@@ -2,13 +2,26 @@ package php4java;
 
 import org.junit.Test;
 
+import php4java.Interfaces.IPhp;
+import php4java.Impl.*;
+import php4java.Php4JavaException;
+
 public class Tests
 {
     @Test
     public void testSimpleValueReturn()
     {
         System.out.printf("Creating PHP instance...\n");
-        var instance = PhpInstanceFactory.CreateInstance();
+
+        IPhp instance = null;
+        try
+        {
+            instance = PhpInstanceFactory.CreateInstance();
+        }
+        catch (Php4JavaException exc)
+        {
+            System.out.println(exc);
+        }
 
         final String command = "1;";
         System.out.println("Running '" + command + "' in PHP...\n");
@@ -35,7 +48,15 @@ public class Tests
     public void testReturnSituation()
     {
         System.out.printf("Creating PHP instance...\n");
-        var instance = PhpInstanceFactory.CreateInstance();
+        IPhp instance = null;
+        try
+        {
+            instance = PhpInstanceFactory.CreateInstance();
+        }
+        catch (Php4JavaException exc)
+        {
+            System.out.println(exc);
+        }
 
         final String command = "$cinosad = (14324); return $cinosad;";
         System.out.println("Running '" + command + "' in PHP...\n");
@@ -63,7 +84,16 @@ public class Tests
     {
         for (int i = 0; i < 2; ++i)
         {
-            var instance = PhpInstanceFactory.CreateInstance();
+            IPhp instance = null;
+            try
+            {
+                instance = PhpInstanceFactory.CreateInstance();
+            }
+            catch (Php4JavaException exc)
+            {
+                System.out.println(exc);
+            }
+
             try
             {
                 var result = instance.execString("return \\'TEST_STRING\\';");

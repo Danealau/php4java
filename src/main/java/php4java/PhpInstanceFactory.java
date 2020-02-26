@@ -16,7 +16,7 @@ public class PhpInstanceFactory
     {
         try
         {
-            Runtime.getRuntime().exec("rsync -r ./ ./" + _tempFolderNamePattern + _internalInstanceCounter + "/").waitFor();
+            Runtime.getRuntime().exec(new String[] { "sh", "-c", "rsync -r ./libphp4java.dylib ./" + _tempFolderNamePattern + _internalInstanceCounter + "/ --exclude=\\'*.jar\\'" }).waitFor();
         }
         catch (IOException | InterruptedException exc)
         {
@@ -24,7 +24,7 @@ public class PhpInstanceFactory
         }
     }
 
-    public static synchronized php4java.Interfaces.IPhp CreateInstance()
+    public static synchronized php4java.Interfaces.IPhp CreateInstance() throws Php4JavaException
     {
         // Remove all other temp files that were created before
         try
@@ -33,7 +33,7 @@ public class PhpInstanceFactory
         }
         catch (IOException | InterruptedException exc)
         {
-            System.out.println(exc);
+            throw new Php4JavaException(exc);
         }
 
         // Create new PHP instance folder
@@ -54,35 +54,30 @@ public class PhpInstanceFactory
                 var b = reloaded.getDeclaredConstructor().newInstance();
 
                 try
-        {
-            Runtime.getRuntime().exec(new String[] { "sh", "-c", ("install_name_tool -id " + _internalInstanceCounter + " " + _tempFolderNamePattern + _internalInstanceCounter + "/libphp4java.dylib") }).waitFor();
-        }
-        catch (IOException | InterruptedException exc)
-        {
-            System.out.println(exc);
-        }
+                {
+                    Runtime.getRuntime().exec(new String[] { "sh", "-c", ("install_name_tool -id " + _internalInstanceCounter + " " + _tempFolderNamePattern + _internalInstanceCounter + "/libphp4java.dylib") }).waitFor();
+                }
+                catch (IOException | InterruptedException exc)
+                {
+                    throw new Php4JavaException(exc);
+                }
 
                 // Load library with php4java
-                System.out.println("Attempting to load " + Paths.get(_tempFolderNamePattern + _internalInstanceCounter + "/libphp4java.dylib").toAbsolutePath().toString());
                 b.getClass().getDeclaredMethod("preloadLibrary", new Class[]{String.class}).invoke(b, Paths.get(_tempFolderNamePattern + _internalInstanceCounter + "/libphp4java.dylib").toAbsolutePath().toString());
-                System.out.println("Loaded " + Paths.get(_tempFolderNamePattern + _internalInstanceCounter + "/libphp4java.dylib").toAbsolutePath().toString());
 
                 ++_internalInstanceCounter;
 
                 return new php4java.Impl.PhpInstance(b);
             }
         }
-        catch(InvocationTargetException aaa)
+        catch(InvocationTargetException exc)
         {
-            System.out.println("Excaaa: ");
-            System.out.println(aaa.getCause());
+            throw new Php4JavaException(exc);
         }
-        catch(Exception ccc)
+        catch(Exception exc)
         {
-            System.out.println("Exc: ");
-            ccc.printStackTrace();
+            throw new Php4JavaException(exc);
         }
-        return null;
     }
     
     protected static void _removeFiles(String folderPath, String regex)
