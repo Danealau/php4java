@@ -1,59 +1,68 @@
 package php4java.Impl;
 
 import php4java.Interfaces.*;
-import java.lang.reflect.*;
+import php4java.Native.Php;
+import php4java.Native.Zval;
+
+import java.rmi.RemoteException;
+import java.rmi.server.UnicastRemoteObject;
+import java.util.HashMap;
 import java.util.concurrent.locks.ReentrantLock;
 
-public class PhpInstance implements IPhp
+public class PhpInstance extends UnicastRemoteObject implements IPhp
 {
-    public PhpInstance(Object obj) throws Exception
+    private static final long serialVersionUID = 1L;
+
+    public PhpInstance() throws RemoteException
     {
-        if (obj.getClass().getName() != "php4java.Native.Php")
-            throw new Exception();
-        
+        super();
+
+        var php = new Php();
+
         // Try to init new PHP interpreter
-        Lock();
-        obj.getClass().getDeclaredMethod("init").invoke(obj);
-        Unlock();
-        _php = obj;
+        lock();
+        php.init();
+        unlock();
+
+        _php = php;
+    }
+
+    private IPhpReturnValue generateResult(Zval retVal) throws RemoteException
+    {
+        var arr = retVal.getArray();
+        var iarr = new IPhpReturnValue[arr.length];
+        //for (int i = 0; i < arr.length; ++i)
+        //    iarr[i] = generateResult(arr[i]);
+
+        //var map = retVal.getHash();
+        var imap = new HashMap<String, IPhpReturnValue>();
+        //for (var kv : map.entrySet())
+        //    imap.put(kv.getKey(), generateResult(kv.getValue()));
+
+        return new PhpReturnValue(retVal.getLong(), retVal.getDouble(), retVal.getBoolean(), retVal.getJson(), retVal.getJson(), iarr, imap);
     }
 
     @Override
-    public IPhpVal execString(String code) throws php4java.Php4JavaException
+    public IPhpReturnValue execString(String code) throws RemoteException
     {
-        Object result = null;
-        try
-        {
-            Lock();
-            result = _php.getClass().getDeclaredMethod("__eval", new Class[]{String.class}).invoke(_php, "eval('" + code + "');");
-            Unlock();
-        }
-        catch(InvocationTargetException | NoSuchMethodException | IllegalArgumentException | IllegalAccessException exc)
-        {
-            throw new php4java.Php4JavaException(exc.getCause().toString());
-        }
+        lock();
+        var retVal = generateResult(_php.__eval("eval('" + code + "');"));
+        unlock();
 
-        try
-        {
-            return new PhpVal(this, result);
-        }
-        catch(IllegalAccessException exc)
-        {
-            throw new php4java.Php4JavaException(exc.toString());
-        }
+        return retVal;
     }
 
-    public void Lock()
+    public void lock()
     {
         _mutex.lock();
     }
 
-    public void Unlock()
+    public void unlock()
     {
         _mutex.unlock();
     }
 
     protected ReentrantLock _mutex = new ReentrantLock();
 
-    protected Object _php;
+    protected Php _php;
 }

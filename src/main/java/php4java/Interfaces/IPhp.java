@@ -1,6 +1,9 @@
 package php4java.Interfaces;
 
-public interface IPhp
+import java.rmi.Remote;
+import java.rmi.RemoteException;
+
+public interface IPhp extends Remote
 {
-    IPhpVal execString(String code) throws php4java.Php4JavaException;
+    IPhpReturnValue execString(String code) throws RemoteException;
 }

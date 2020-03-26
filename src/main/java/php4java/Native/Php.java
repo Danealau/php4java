@@ -2,6 +2,11 @@ package php4java.Native;
 
 public class Php
 {
+    static
+    {
+        System.loadLibrary("php4java");
+    }
+
     public Php() {}
 
     public void preloadLibrary(String libraryPath)

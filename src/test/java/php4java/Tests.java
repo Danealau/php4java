@@ -1,24 +1,26 @@
 package php4java;
 
+import java.rmi.RemoteException;
+
 import org.junit.Test;
 
 import php4java.Interfaces.IPhp;
 import php4java.Impl.*;
-import php4java.Php4JavaException;
 
 public class Tests
 {
     @Test
     public void testSimpleValueReturn()
     {
+        /*
         System.out.printf("Creating PHP instance...\n");
 
         IPhp instance = null;
         try
         {
-            instance = PhpInstanceFactory.CreateInstance();
+            instance = new PhpInstance();
         }
-        catch (Php4JavaException exc)
+        catch (RemoteException exc)
         {
             System.out.println(exc);
         }
@@ -38,7 +40,7 @@ public class Tests
             var array = result.asArray();
             System.out.printf("As array: length=%d\n\n", array.length);
         }
-        catch (Php4JavaException exception)
+        catch (RemoteException exception)
         {
             System.err.println(exception);
         }
@@ -51,9 +53,9 @@ public class Tests
         IPhp instance = null;
         try
         {
-            instance = PhpInstanceFactory.CreateInstance();
+            instance = new PhpInstance();
         }
-        catch (Php4JavaException exc)
+        catch (RemoteException exc)
         {
             System.out.println(exc);
         }
@@ -73,7 +75,7 @@ public class Tests
             var array = result.asArray();
             System.out.printf("As array: length=%d\n\n", array.length);
         }
-        catch (Php4JavaException exception)
+        catch (RemoteException exception)
         {
             System.err.println(exception);
         }
@@ -87,9 +89,9 @@ public class Tests
             IPhp instance = null;
             try
             {
-                instance = PhpInstanceFactory.CreateInstance();
+                instance = new PhpInstance();
             }
-            catch (Php4JavaException exc)
+            catch (RemoteException exc)
             {
                 System.out.println(exc);
             }
@@ -104,11 +106,12 @@ public class Tests
                 //System.out.println(result != null ? result.asHash() : "NULL");
                 //System.out.println(result != null ? result.asJson() : "NULL");
             }
-            catch(Php4JavaException exception)
+            catch(RemoteException exception)
             {
                 System.out.println("CODESTRING");
                 System.out.println(exception);
             }
         }
+        */
     }
 }

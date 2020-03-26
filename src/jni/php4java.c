@@ -40,12 +40,31 @@ static jobject zval2obj(JNIEnv *env, zval *z) {
     return obj;
 }
 
+// Custom error handler for PHP
+JNIEnv* __env = NULL;
+void __php4java_zend_error(int type, const char *format, ...)
+{
+    va_list arglist;
+    char* err_str_ptr = NULL;
+    const char* msg = "[php4java : PHP-JNI : zend_error] Internal %s exception caught!\n>> Message: %s\n>> File: %s\n>> Line: %d";
+    
+    va_start(arglist, format);
+    ssize_t bufsz = vsnprintf(NULL, 0, format, arglist);
+    err_str_ptr = malloc(bufsz + 1);
+    vsnprintf(err_str_ptr, bufsz + 1, format, arglist);
+    va_end(arglist);
+
+    (*__env)->ThrowNew(__env, (*__env)->FindClass(__env, "java/lang/Exception"), err_str_ptr);
+}
+
 /*
  * Class:     php4java_Php
  * Method:    init
  * Signature: ()V
  */
 JNIEXPORT void JNICALL Java_php4java_Native_Php_init(JNIEnv *env, jclass cls) {
+    __env = env;
+    //php_embed_module.sapi_error = __php4java_zend_error;
     php_embed_init(0, NULL);
 }
 
@@ -70,6 +89,8 @@ static inline zend_class_entry *i_get_exception_base(zval *object)
 
 void __process_php4java_exception(JNIEnv *env)
 {
+    printf("Handling PHP exception...");
+
     zval excval, rv;
     zend_class_entry *ce_exception;
 
@@ -84,6 +105,8 @@ void __process_php4java_exception(JNIEnv *env)
 
     if (ce_exception == zend_ce_parse_error || ce_exception == zend_ce_compile_error || instanceof_function(ce_exception, zend_ce_throwable))
     {
+        printf("Handling PHP exception A...");
+
         // Get message from exception
         zend_string* message = zval_get_string(GET_PROPERTY(&excval, ZEND_STR_MESSAGE));
 
@@ -96,6 +119,8 @@ void __process_php4java_exception(JNIEnv *env)
         char* err_str_ptr = NULL;
         if (ce_exception == zend_ce_parse_error || ce_exception == zend_ce_compile_error)
         {
+            printf("Handling PHP exception B...");
+
             bool is_parse_err = (ce_exception == zend_ce_parse_error);
 
             const char* msg = "[php4java : PHP-JNI : eval] Internal %s exception caught!\n>> Message: %s\n>> File: %s\n>> Line: %d";
@@ -105,6 +130,8 @@ void __process_php4java_exception(JNIEnv *env)
         }
         else
         {
+            printf("Handling PHP exception C...");
+
             const char* msg = "[php4java : PHP-JNI : eval] PHP runtime throwable exception caught!\n>> Message: %s\n>> File: %s\n>> Line: %d";
             ssize_t bufsz = snprintf(NULL, 0, msg, ZSTR_VAL(message), ZSTR_VAL(file), line);
             err_str_ptr = malloc(bufsz + 1);
@@ -154,6 +181,7 @@ JNIEXPORT jobject JNICALL Java_php4java_Native_Php__1_1eval(JNIEnv *env, jclass 
 
     (*env)->ReleaseStringUTFChars(env, jcode, code);
 
+    printf("Result PHP: %d", retval);
     obj = zval2obj(env, &retval);
     zval_ptr_dtor(&retval);
 
